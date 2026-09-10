@@ -17,11 +17,24 @@ artifacts/
 .env
 .env.*
 local.properties
+key.properties
+keystore.properties
 *.keystore
 *.jks
 *.pfx
+*.p12
+*.pem
+*.key
+*.dpapi
+database.pending
+sync.pending
 *.qaccount
 *.sqlite*
+*.db
+*.db-*
+
+# 本机代理规则链接
+/AGENTS.md
 
 # 本地设计、需求、配色和测试材料
 *需求*.md
