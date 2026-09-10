@@ -16,7 +16,7 @@
 - 在 Windows 上核对截图识别或选定来源的通知，补齐信息后保存账单。
 - 在 Windows 上使用 Windows Hello 开启账本界面锁。
 
-当前版本处于开发验证阶段。Android 已开始接入；截图识别、通知读取和应用锁暂未提供。具体构建及验收结果见 [Public.md](Public.md)。
+当前版本处于开发验证阶段。Android 首个 ARM64 调试包已构建通过，仍待手机运行验收；截图识别、通知读取和应用锁暂未提供。具体构建及验收结果见 [Public.md](Public.md)。
 
 ## 安装方法
 
@@ -98,7 +98,7 @@ Android 开发安装（Linux 或 macOS，需要 Bash）：
 
 Android 工程最低为 Android 7.0（API 24），默认生成 ARM64 调试包。页面依赖系统 WebView，请保持 WebView 更新；目前尚未完成 Android 实机运行和双端同步验收。
 
-文件、系统通知、图片识别和设备密钥保护使用 Windows 能力，必须在实际 Windows 环境检查。普通浏览器可用于开发界面验收，不能代替这些系统能力的验证。
+Windows 的文件操作、系统通知、图片识别和设备密钥保护需在 Windows 实机检查；Android 的设备密钥和文件操作需在手机检查。普通浏览器可用于开发界面验收。
 
 ## 常见问题
 
@@ -127,15 +127,14 @@ Android 进程存活时会尝试同步，但没有常驻后台服务；系统结
 <details>
 <summary>查看版本记录</summary>
 
-### v0.1.0（Android 开发增量，未发布）
+### v0.1.0（开发中，未发布）
 
 - 按 Windows、Linux、Android、iOS 分目录，共用账务、同步和界面模块。
 - 统一界面中的导航、账单、助手、空状态及弹窗图标，采用简洁的 SVG 线条绘制。
 - 建立 Android 工程，复用现有记账、加密存储和同步核心。
 - 增加手机布局、Android Keystore 密钥保护及系统文件读写。
-- 增加 ARM64 调试包构建命令与 Android CI，运行验收状态见工程说明。
-
-### v0.1.0
+- 增加 ARM64 调试包构建命令与 Android CI，完成首个 APK 构建、签名与对齐检查。
+- Android 启动图标使用与主页一致的 SVG 源，生成系统自适应图标。
 
 - 建立 Rust + WebView2 Windows 工程。
 - 接入本地账务、导入去重、统计、加密备份与同步基础能力。

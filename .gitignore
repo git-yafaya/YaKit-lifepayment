@@ -7,6 +7,8 @@ dist/
 artifacts/
 .vite/
 .gradle/
+.tauri/
+**/gen/schemas/
 **/bin/
 **/obj/
 **/build/

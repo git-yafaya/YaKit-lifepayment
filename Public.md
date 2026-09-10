@@ -57,12 +57,10 @@
 │   │   │       │           │           └── lightledger/
 │   │   │       │           │               └── MainActivity.kt  # Android Activity 入口
 │   │   │       │           └── res/
-│   │   │       │               ├── drawable/
-│   │   │       │               │   └── ic_launcher_background.xml  # 启动图标背景
-│   │   │       │               ├── drawable-v24/
-│   │   │       │               │   └── ic_launcher_foreground.xml  # 启动图标前景
 │   │   │       │               ├── layout/
 │   │   │       │               │   └── activity_main.xml  # Android 容器布局
+│   │   │       │               ├── mipmap-anydpi-v26/
+│   │   │       │               │   └── ic_launcher.xml  # Android 自适应启动图标
 │   │   │       │               ├── mipmap-hdpi/
 │   │   │       │               │   ├── ic_launcher.png  # Android 启动图标
 │   │   │       │               │   ├── ic_launcher_foreground.png  # Android 启动图标
@@ -85,6 +83,7 @@
 │   │   │       │               │   └── ic_launcher_round.png  # Android 启动图标
 │   │   │       │               ├── values/
 │   │   │       │               │   ├── colors.xml  # Android 容器颜色
+│   │   │       │               │   ├── ic_launcher_background.xml  # 启动图标背景色
 │   │   │       │               │   ├── strings.xml  # Android 应用文字
 │   │   │       │               │   └── themes.xml  # Android 原生容器主题
 │   │   │       │               ├── values-night/
@@ -112,6 +111,8 @@
 │   │   │       ├── gradlew  # Gradle Unix 启动器
 │   │   │       ├── gradlew.bat  # Gradle Windows 启动器
 │   │   │       └── settings.gradle  # Android 模块装配
+│   │   ├── icons/
+│   │   │   └── icon.svg  # 与主页一致的 Android 启动图标源
 │   │   ├── src/
 │   │   │   └── platform.rs  # Android 能力声明
 │   │   └── tauri.conf.json  # 本平台窗口与构建配置
@@ -237,6 +238,9 @@
 | 共同操作 | 通过可信成员名册验证申请人；核心修改和共同删除由相应成员确认 |
 | 个人删除共享记录 | 个人记录进入回收站，共同快照继续保留；共同审批删除后移除投影，个人恢复不会自动重新共享 |
 | 无效密钥、损坏数据 | 报错并保留原始文件，不创建空账本覆盖旧数据 |
+| Android 文件输入 | 支持已授权的 content URI、file URI 和本机路径；其他地址报错。文本读取上限为 20 MiB，非法 UTF-8 报错，文件格式按显示文件名判断 |
+| Android 备份中转 | 使用私有临时目录，只中转加密备份；成功和失败都清理暂存，启动时清理上次中断的暂存。目标写入失败会报错，所选目标文件可能不完整 |
+| Android 密钥迁移 | 数据库已存在但密钥文件丢失时中止启动；Keystore 密钥不导出，系统云备份和换机迁移排除账本，换机使用加密备份或同步 |
 | 备份恢复 | 校验口令和数据后事务恢复；失败回滚，成功后重新建立设备信任 |
 
 ### 同步与密钥
@@ -252,6 +256,8 @@ WebDAV 使用 HTTPS。配置探测包含目录读取、临时对象写入、读�
 | 设置或机制 | 默认值或含义 |
 | --- | --- |
 | 窗口 | 1200×800，最小尺寸由 Tauri 配置约束，各页面复用同一窗口 |
+| 手机布局 | 不超过 560px 时使用顶部六项文字导航和整宽页面；共用 safe area、动态视口高度、弹窗滚动及主页微动效 |
+| Android 系统能力 | OCR、通知读取、生物识别尚未接入；返回不可用及原因，对应入口禁用 |
 | 默认币种 | CNY；统计按币种分组 |
 | 本地数据 | 当前用户应用本地目录，数据库采用 SQLCipher |
 | WebDAV | 初始未配置；读写探测通过后保存凭据 |
@@ -273,7 +279,16 @@ WebDAV 使用 HTTPS。配置探测包含目录读取、临时对象写入、读�
 | Tauri 命令 | 参数 | 返回与错误 |
 | --- | --- | --- |
 | `ledger_command` | `action: string`、`payload: object` | 成功返回 JSON；业务校验失败以 rejected Promise 返回中文错误 |
-| `system_command` | `action: string`、`payload: object` | 文件、设备与 Windows 能力结果；无能力或无授权时返回真实错误 |
+| `system_command` | `action: string`、`payload: object` | 文件、设备与本机能力结果；无能力或无授权时返回真实错误 |
+
+Android 沿用上述命令，文件与能力动作的契约如下。Keystore 桥只供 Rust 调用，不向页面开放密钥操作。
+
+| 动作 | 参数与返回 |
+| --- | --- |
+| `readFile` | 输入 `{path}`，返回 `{text,name}`；`name` 为系统显示文件名，无法取得时为空字符串 |
+| `saveFile` | 输入 `{path,text}`，返回 `{saved:true}` |
+| `exportBackup` / `restoreBackup` | Android 的 `path` 可直接传系统授权的 content URI |
+| `capabilities` | Android 增加 `platform:"android"`，不可用的 `ocr`、`notifications`、`hello` 各自提供 `reason` |
 
 在仓库前端 TypeScript 模块中可直接使用：
 
@@ -298,7 +313,7 @@ console.log(records);
 | 数据管理 | `importCsv`、`importJson`、`exportCsv`、`exportJson`、`exportBackup`、`restoreBackup` |
 | 设置 | `accounts`、`categories`、`rules`、`addAccount`、`addCategory`、`learnRule`、`setRule`、`revokeRule` |
 | 同步装配 | `syncConfigure`、`syncStatus`、`syncRun`、`createSharedSpace`、`pairingRequest`、`pairingApprove`、`pairingAccept`、`revokeDevice`、`applyRotation` |
-| Windows | `capabilities`、`ocrImage`、`notificationRequestAccess`、`notificationSources`、`notificationRead`、`helloVerify`、`deviceSettings`、`saveDeviceSettings` |
+| 系统能力 | `capabilities`、`ocrImage`、`notificationRequestAccess`、`notificationSources`、`notificationRead`、`helloVerify`、`deviceSettings`、`saveDeviceSettings`；Android 未接入的操作返回不可用原因 |
 
 常用账务载荷如下；金额和标识按表传入，不能把金额转换成 JavaScript 浮点数。
 
@@ -328,7 +343,8 @@ console.log(records);
 | 普通安装程序 | 配置了 Tauri NSIS/MSI 构建；不会自动获得 MSIX 包身份 |
 | MSIX | 提供清单及构建签名脚本，需 Windows SDK 和已有受信任发布证书 |
 | Windows 整体构建 | 当前 Linux 缺少 MSVC 原生工具，整体构建及安装运行尚未验证；已提供 Windows CI |
-| Android | 已有 Gradle 工程、移动端页面、Keystore 与文件插件；检查点 `c0495de` 的 APK 构建存在 Tauri 运行时版本不兼容，需继续修复和实机验证 |
+| Android | ARM64 调试 APK 已构建并通过签名、16 KB 对齐检查；接入移动端页面、Keystore 与文件插件，安装和系统操作待实机验证 |
+| Android 尚未接入 | 截图 OCR、通知读取、指纹/人脸应用锁、系统分享接收、常驻后台同步及正式发布签名 |
 | Linux / iOS | 已分配开发目录，尚未接入原生入口和打包 |
 | 尚未接入 | 跨端双向联调、持续通知监听、托盘后台、开机启动、远端快照与日志压缩 |
 | 账务待完善 | 转账目前仅作独立流水，不维护收付款双账户余额；共同删除后没有共同回收站恢复或到期物理清理；来源模板、识别置信度和专门账户澄清状态机未实现 |
@@ -347,16 +363,32 @@ console.log(records);
 | `npm ci` | 按锁文件安装前端依赖 | Node.js 22 |
 | `npm run build` | TypeScript 检查及前端生产构建 | 开发机 |
 | `cargo test --locked -p lightledger-core -p lightledger-sync` | 核心和同步内置自检 | Rust 与本地 C/Perl 工具链 |
+| `cargo test --locked --workspace` | 核心、同步与平台文件中转共 10 项自检 | Rust、C/Perl 与宿主 Tauri 开发依赖 |
 | `node --experimental-strip-types scripts/check-ui.mjs` | 金额精度、币种小数位及 HTML 转义检查 | Node.js 22 |
 | `cargo fmt --all --check` | 检查 Rust 格式 | Rustfmt |
 | `cargo metadata --locked --no-deps --format-version 1` | 检查平台与共享包的路径解析 | Rust |
 | `npm run android:build -- --ci -- --locked` | 构建 ARM64 调试包 | JDK 17、Android SDK/NDK |
+| `npm run android:dev` | 连接 Android 手机调试 | 已授权 USB 调试的手机与 Android 工具链 |
 | `npm run tauri:windows -- dev` | 运行 Windows 桌面开发程序 | Windows |
 | `npm run tauri:windows -- build --bundles nsis` | 生成 Windows 安装程序 | Windows |
 | `Windows/scripts/check-platform.sh` | 独立检查 Windows 平台 API 类型 | Rust Windows MSVC target |
 | `Windows/scripts/windows-msix.ps1` | 构建带包身份的签名 MSIX | Windows SDK 与已有证书 |
 
 2026-09-10 目录迁移验证：前端构建、金额检查、Rust 格式、Cargo 路径解析及 Windows API 类型检查通过；共享核心 6/6、同步 2/2、Windows/Android 文件与备份中转各 1/1 通过。本窗口内置浏览器已完成首页、设置、账单页面切换。Tauri 构建钩子也已实际验证：从平台原生目录以 `cwd=../..` 调用根前端构建，避免重复进入平台构建命令。本次未改业务与 UI 行为，Android 原有依赖兼容问题由 Android 开发任务继续处理。
+
+2026-09-10 Android 首轮构建与验收：
+
+| 检查 | 结果 |
+| --- | --- |
+| Tauri 运行时 | 锁定 `tauri-runtime` / `tauri-runtime-wry` 2.10.0，与 Tauri 2.10.2 配套；ARM64 Rust、Kotlin 与 Gradle 编译通过 |
+| 构建环境 | Linux x86_64、JDK 17、SDK 36、AGP 8.11.0、Gradle 8.14.3、NDK 28.2.13676358；AGP 实际使用 Build Tools 35.0.0 |
+| 调试 APK | `Android/src-tauri/gen/android/app/build/outputs/apk/universal/debug/app-universal-debug.apk`；包名 `com.yakit.lightledger`，版本 0.1.0（1000），最低 API 24，目标 API 36，仅 `arm64-v8a` |
+| APK 校验 | `apksigner verify --verbose` 通过 APK v2 签名；`zipalign -c -P 16 4` 通过，原生库各 LOAD 段均按 0x4000 对齐 |
+| 源码检查 | `cargo test --locked --workspace` 10/10、前端生产构建、金额/转义检查、Rust 格式和 Android 脚本语法检查通过 |
+| 本窗口手机视口交互 | 在实际 Rust 临时账本创建账户和 12.34 元支出，核对账单与分析，再删除到回收站；六页导航可操作，360/390px 无横向溢出，短屏弹窗可滚动，1200px 恢复桌面布局 |
+| 待实机验收 | 安装启动、Keystore 重启后解密、系统文件导入导出、加密备份恢复、软键盘与系统返回键、进程生命周期、Android/Windows 双端同步 |
+
+Android 启动图标保留 SVG 源并生成自适应图标，与主页的账本形状和珊瑚色一致。重生成命令见 `Android/DEVELOPMENT.md`。调试 APK 包含调试符号，尚未进行正式发布签名；上述编译和浏览器结果不代表 Android 实机运行已通过。
 
 迁移前代码 `179a920` 的原生构建记录（Linux x86_64、Rust 1.97.1、Node.js 22.22.2）：
 
