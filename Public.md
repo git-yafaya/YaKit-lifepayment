@@ -233,7 +233,21 @@ console.log(records);
 | `scripts/check-platform.sh` | 独立检查 Windows 平台 API 类型 | Rust Windows MSVC target |
 | `scripts/windows-msix.ps1` | 构建带包身份的签名 MSIX | Windows SDK 与已有证书 |
 
-本次在 Linux 上完成前端生产构建、金额自检及 6 项核心、2 项同步测试；错误密钥检查会产生预期的 SQLCipher 解密错误日志。50,000 条记录的 debug 内存 SQLCipher 测量：填充约 1.55 秒，分页 50 条加汇总约 397 毫秒，1,000 行导入约 5.17 秒；不是 Windows 磁盘性能或整机验收结果。
+2026-09-10 复测代码提交 `179a920`，环境为 Linux x86_64、Rust 1.97.1、Node.js 22.22.2：
+
+| 检查 | 本次结果 |
+| --- | --- |
+| `npm run build` | TypeScript 检查及 Vite 生产构建通过 |
+| `node --experimental-strip-types scripts/check-ui.mjs` | 金额精度、币种小数位和文本转义通过 |
+| `cargo fmt --all --check` | 通过 |
+| `cargo test --locked -p lightledger-core -p lightledger-sync -- --nocapture` | 核心 6/6、同步 2/2 通过，无失败；分别耗时 12.03 秒、26.62 秒 |
+| `CARGO_NET_OFFLINE=true scripts/check-platform.sh` | Windows OCR、通知与 Hello 平台模块的独立 MSVC 目标类型检查通过 |
+| `cargo check --locked -p lightledger-app --target x86_64-pc-windows-msvc` | 退出码 101；OpenSSL/ring 原生构建失败，明确报错缺少 `lib.exe`，尚不能确认 Windows 整体编译通过 |
+| 浏览器交互 | 子代理直连 IAB 返回 `IAB visibility is not supported in a subagent thread`；已停止，未读取页面或执行操作 |
+
+核心测试覆盖加密数据库、备份错误密码回滚、金额与退款约束、导入幂等和逐行失败、个人/共同删除与审批、跨午夜查询和字段冲突。同步测试覆盖签名与加密、固定密码向量、配对撤销、模拟 WebDAV 重试及连续序号；不代表真实 NAS 或 Windows 运行验收。错误密钥检查产生的 SQLCipher 解密错误日志是预期结果。
+
+本次 50,000 条记录的 debug 内存 SQLCipher 测量：填充约 1.37 秒，分页 50 条加汇总约 359 毫秒，1,000 行导入约 4.34 秒；不是 Windows 磁盘性能或整机验收结果。
 
 MSIX 构建示例（证书已放在当前用户证书库，目标设备已信任签发链）：
 
