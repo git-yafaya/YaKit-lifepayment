@@ -1,0 +1,41 @@
+# 本地依赖与缓存
+node_modules/
+.cache/
+coverage/
+.gradle/
+**/bin/
+**/obj/
+**/build/
+
+# 本地凭据与环境配置
+.env
+.env.*
+local.properties
+*.keystore
+*.jks
+*.pfx
+
+# 本地设计、需求、配色和测试材料
+*需求*.md
+*配色*.md
+*设计*.md
+*DESIGN*
+*design*
+tests/
+Tests/
+**/tests/
+**/Tests/
+
+# 日志
+*.log
+
+# 编辑器与系统文件
+.idea/
+.vscode/
+.vs/
+*.swp
+*.swo
+*~
+.DS_Store
+Thumbs.db
+Desktop.ini
