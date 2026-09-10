@@ -33,5 +33,5 @@ jobs:
       - uses: actions/upload-artifact@v4
         with:
           name: LightLedger-Android-arm64-debug
-          path: src-tauri/gen/android/app/build/outputs/apk/universal/debug/*.apk
+          path: Android/src-tauri/gen/android/app/build/outputs/apk/universal/debug/*.apk
           if-no-files-found: error

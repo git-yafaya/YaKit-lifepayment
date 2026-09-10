@@ -6,7 +6,7 @@ param(
     [switch]$SkipBuild
 )
 $ErrorActionPreference = 'Stop'
-$root = Split-Path -Parent $PSScriptRoot
+$root = Split-Path -Parent (Split-Path -Parent $PSScriptRoot)
 $certificate = Get-Item "Cert:\CurrentUser\My\$CertificateThumbprint"
 if (-not $certificate.HasPrivateKey) { throw '签名证书必须带有私钥。' }
 if ($certificate.NotAfter -lt (Get-Date)) { throw '签名证书已经过期。' }
@@ -20,7 +20,7 @@ try {
     if (-not $SkipBuild) {
         npm ci
         if ($LASTEXITCODE -ne 0) { throw '前端依赖安装失败。' }
-        npm run tauri -- build --target x86_64-pc-windows-msvc --no-bundle
+        npm run tauri:windows -- build --target x86_64-pc-windows-msvc --no-bundle
         if ($LASTEXITCODE -ne 0) { throw 'Windows 应用构建失败。' }
     }
     $release = Join-Path $root 'target\x86_64-pc-windows-msvc\release'
@@ -29,8 +29,8 @@ try {
     New-Item $stage -ItemType Directory | Out-Null
     Copy-Item $exe $stage
     Get-ChildItem $release -Filter '*.dll' | Copy-Item -Destination $stage
-    Copy-Item (Join-Path $root 'packaging\windows\Assets') $stage -Recurse
-    [xml]$manifest = Get-Content (Join-Path $root 'packaging\windows\AppxManifest.xml') -Raw -Encoding UTF8
+    Copy-Item (Join-Path $root 'Windows\packaging\Assets') $stage -Recurse
+    [xml]$manifest = Get-Content (Join-Path $root 'Windows\packaging\AppxManifest.xml') -Raw -Encoding UTF8
     $manifest.Package.Identity.Publisher = $certificate.Subject
     $manifest.Package.Identity.Version = $Version
     $manifest.Save((Join-Path $stage 'AppxManifest.xml'))

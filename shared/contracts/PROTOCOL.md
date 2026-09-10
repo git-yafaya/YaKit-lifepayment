@@ -1,6 +1,6 @@
 # 轻账互通协议 v1
 
-实现是 Rust Windows 客户端；尚无 Android 客户端或 Android 双向联调结果。协议变更必须增加版本，不能按语言默认序列化猜测认证内容。
+Windows 与 Android 工程共用本目录协议及 `shared/crates/ledger-sync`；Android 跨端双向联调尚未完成。协议变更必须增加版本，不能按语言默认序列化猜测认证内容。
 
 ## 数据及目录
 

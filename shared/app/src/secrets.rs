@@ -1,6 +1,6 @@
 use std::{fs, path::Path};
 #[cfg(windows)]
-#[path = "secrets_windows.rs"]
+#[path = "../../../Windows/src-tauri/src/secrets_windows.rs"]
 mod windows;
 #[cfg(target_os = "android")]
 use tauri_plugin_device::protect;

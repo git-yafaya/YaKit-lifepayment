@@ -21,19 +21,30 @@
 
 当前仓库提供源码，尚未发布经过实机验收的安装包。
 
+源码按平台分开管理，账务、同步和页面由各平台共同使用：
+
+| 目录 | 开发入口 |
+| --- | --- |
+| `Windows/` | [Windows 开发说明](Windows/DEVELOPMENT.md) |
+| `linux/` | [Linux 开发说明](linux/DEVELOPMENT.md)，原生客户端待接入 |
+| `Android/` | [Android 开发说明](Android/DEVELOPMENT.md) |
+| `ios/` | [iOS 开发说明](ios/DEVELOPMENT.md)，原生客户端待接入 |
+| `shared/` | 共用的账务、同步、原生装配、界面和协议 |
+
+
 1. 在 Windows 11 x64 上安装 Node.js 22、Rust stable，以及包含“使用 C++ 的桌面开发”的 Visual Studio Build Tools。
 2. 准备 Windows SDK、WebView2 Runtime 和 Windows 原生 Perl。SQLCipher 的捆绑构建需要编译 OpenSSL。
 3. 在仓库目录运行以下命令：
 
    ```powershell
    npm ci
-   npm run tauri -- dev
+   npm run tauri:windows -- dev
    ```
 
 4. 生成 Windows 安装程序：
 
    ```powershell
-   npm run tauri -- build --bundles nsis
+   npm run tauri:windows -- build --bundles nsis
    ```
 
 5. 安装程序输出到 `target/release/bundle/nsis/`。具备 Windows 包身份的版本及系统识别能力按 [Public.md](Public.md) 的平台说明验证。
@@ -52,7 +63,7 @@ Android 开发安装（Linux 或 macOS，需要 Bash）：
    npm run android:build -- --ci -- --locked
    ```
 
-4. 在 `src-tauri/gen/android/app/build/outputs/apk/universal/debug/` 找到 APK，传到 ARM64 手机并按系统提示安装。它是开发调试包，不是正式发布版本。
+4. 在 `Android/src-tauri/gen/android/app/build/outputs/apk/universal/debug/` 找到 APK，传到 ARM64 手机并按系统提示安装。它是开发调试包，不是正式发布版本。
 5. 需要开发调试时，连接已开启 USB 调试的手机，执行 `npm run android:dev`。选择其他架构的模拟器前，先安装相应的 Rust target。
 
 仓库已包含 Android 工程，无需再次运行 `android init`。SDK 与 NDK 的安装说明见 [Android SDK 工具](https://developer.android.com/studio#command-line-tools-only)。
@@ -117,6 +128,7 @@ Android 进程存活时会尝试同步，但没有常驻后台服务；系统结
 
 ### v0.1.0（Android 开发增量，未发布）
 
+- 按 Windows、Linux、Android、iOS 分目录，共用账务、同步和界面模块。
 - 建立 Android 工程，复用现有记账、加密存储和同步核心。
 - 增加手机布局、Android Keystore 密钥保护及系统文件读写。
 - 增加 ARM64 调试包构建命令与 Android CI，运行验收状态见工程说明。

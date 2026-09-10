@@ -1,8 +1,3 @@
-#[cfg(windows)]
-mod windows;
-#[cfg(windows)]
-pub use windows::*;
-
 #[cfg(target_os = "android")]
 pub fn capabilities() -> serde_json::Value {
     serde_json::json!({

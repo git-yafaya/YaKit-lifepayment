@@ -2,7 +2,11 @@
 mod app;
 #[cfg(any(windows, target_os = "android", test))]
 mod files;
-#[cfg(any(windows, target_os = "android"))]
+#[cfg(windows)]
+#[path = "../../../Windows/src-tauri/src/platform/windows.rs"]
+mod platform;
+#[cfg(target_os = "android")]
+#[path = "../../../Android/src-tauri/src/platform.rs"]
 mod platform;
 #[cfg(any(windows, target_os = "android"))]
 mod runtime;

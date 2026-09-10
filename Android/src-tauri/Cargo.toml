@@ -1,0 +1,23 @@
+[package]
+name = "lightledger-android"
+version = "0.1.0"
+edition = "2024"
+build = "../../shared/app/build.rs"
+[lib]
+path = "../../shared/app/src/lib.rs"
+name = "lightledger_android_lib"
+crate-type = ["staticlib", "cdylib", "rlib"]
+
+[build-dependencies]
+tauri-build = { version = "=2.5.5", features = [] }
+[dependencies]
+lightledger-core = { path = "../../shared/crates/ledger-core" }
+lightledger-sync = { path = "../../shared/crates/ledger-sync" }
+serde_json = "=1.0.149"
+serde = { version = "=1.0.228", features = ["derive"] }
+rand = "=0.8.5"
+base64 = "=0.22.1"
+[target.'cfg(target_os = "android")'.dependencies]
+tauri = { version = "=2.10.2", features = [] }
+tauri-plugin-dialog = "=2.6.0"
+tauri-plugin-device = { path = "../tauri-plugin-device" }

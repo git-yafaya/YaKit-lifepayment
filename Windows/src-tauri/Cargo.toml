@@ -2,25 +2,24 @@
 name = "lightledger-app"
 version = "0.1.0"
 edition = "2024"
+build = "../../shared/app/build.rs"
 [lib]
+path = "../../shared/app/src/lib.rs"
 name = "lightledger_app_lib"
 crate-type = ["staticlib", "cdylib", "rlib"]
 
 [build-dependencies]
 tauri-build = { version = "=2.5.5", features = [] }
 [dependencies]
-lightledger-core = { path = "../crates/ledger-core" }
-lightledger-sync = { path = "../crates/ledger-sync" }
+lightledger-core = { path = "../../shared/crates/ledger-core" }
+lightledger-sync = { path = "../../shared/crates/ledger-sync" }
 serde_json = "=1.0.149"
 serde = { version = "=1.0.228", features = ["derive"] }
 rand = "=0.8.5"
 base64 = "=0.22.1"
-[target.'cfg(any(windows, target_os = "android"))'.dependencies]
+[target.'cfg(windows)'.dependencies]
 tauri = { version = "=2.10.2", features = [] }
 tauri-plugin-dialog = "=2.6.0"
-[target.'cfg(target_os = "android")'.dependencies]
-tauri-plugin-device = { path = "tauri-plugin-device" }
-[target.'cfg(windows)'.dependencies]
 windows-sys = { version = "=0.61.2", features = ["Win32_Security_Cryptography", "Win32_Foundation", "Win32_System_Memory", "Win32_UI_WindowsAndMessaging"] }
 windows = { version = "=0.62.2", features = ["ApplicationModel", "Foundation", "Foundation_Collections", "Globalization", "Graphics_Imaging", "Media_Ocr", "Storage", "Storage_Streams", "Security_Credentials_UI", "UI_Notifications", "UI_Notifications_Management", "Win32_Foundation", "Win32_System_WinRT"] }
 

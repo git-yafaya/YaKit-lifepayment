@@ -1,6 +1,6 @@
 [workspace]
-members = ["crates/ledger-core", "crates/ledger-sync", "src-tauri", "src-tauri/tauri-plugin-device"]
-default-members = ["crates/ledger-core", "crates/ledger-sync"]
+members = ["shared/crates/ledger-core", "shared/crates/ledger-sync", "Windows/src-tauri", "Android/src-tauri", "Android/tauri-plugin-device"]
+default-members = ["shared/crates/ledger-core", "shared/crates/ledger-sync"]
 resolver = "2"
 
 [profile.release]

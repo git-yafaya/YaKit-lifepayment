@@ -1,109 +1,224 @@
-# 轻账 Windows 工程说明
+# 轻账工程说明
 
-轻账使用 Rust 实现账务与同步，通过 Tauri 2 在 Windows WebView2 中加载 TypeScript 界面；需要构建前端和原生程序。
+轻账按 Windows、Linux、Android、iOS 分目录开发，使用 Rust 账务与同步核心、Tauri 装配和 TypeScript WebView 页面；共享模块集中在 `shared/`，原生程序各自构建。
 
 ## 仓库结构
 
 ```text
-.github/workflows/windows.yml          # Windows 编译、自检与安装包构建
-.gitignore                             # 本地材料、依赖与产物排除规则
-AGENTS.md                              # 项目开发与验收约定
-Cargo.toml                             # Rust 工作区定义
-Cargo.lock                             # Rust 锁定依赖
-package.json                           # 前端命令与 Tauri CLI 依赖
-package-lock.json                      # Node 锁定依赖
-tsconfig.json                          # TypeScript 检查选项
-vite.config.ts                         # 页面构建与本地服务
-README.md                              # 安装和使用说明
-Public.md                              # 工程与接口说明
-frontend/
-├── index.html                         # WebView 页面入口
-├── main.ts                            # 导航、账本范围与页面装配
-├── bridge.ts                          # 原生命令与开发连接
-├── types.ts                           # 数据类型、金额格式及文本转义
-├── env.d.ts                           # 开发环境类型
-├── style.css                          # 全部页面共用主题与动效
-└── components/
-    ├── ui.ts                          # 弹窗、提示与通用表单
-    ├── transactions.ts                # 账单列表、分页与操作
-    ├── editor.ts                      # 账单编辑和文本确认
-    ├── analysis.ts                    # 日期筛选与分类统计
-    ├── pending.ts                     # 重复、冲突与共同申请确认
-    ├── settings.ts                    # 账户与设置页装配
-    ├── rules.ts                       # 分类规则管理
-    ├── files.ts                       # 账单导入导出与备份入口
-    ├── devices.ts                     # 邀请文件与设备管理
-    ├── sync-status.ts                 # 同步状态、暂停及结果提示
-    └── platform.ts                    # OCR、通知与应用锁界面
-crates/
-├── ledger-core/
-│   ├── Cargo.toml                     # 账务核心依赖
-│   ├── examples/dev_bridge.rs         # 临时账本的本机 HTTP 开发桥
-│   └── src/
-│       ├── lib.rs                    # SQLCipher、事务、校验与内置自检
-│       ├── commands.rs               # 账务动作分发与修改
-│       ├── queries.rs                # 分页查询、规则和统计
-│       ├── capture.rs                # 文本解析、来源与去重
-│       ├── workflow.rs               # 候选、冲突、合并与来源保留
-│       ├── transfer.rs               # CSV/JSON 和加密备份
-│       └── sync.rs                   # Outbox、远端操作和字段版本
-└── ledger-sync/
-    ├── Cargo.toml                     # 同步和密码依赖
-    └── src/
-        ├── lib.rs                    # 模块入口及协议内置自检
-        ├── crypto.rs                 # 密文信封、签名与空间密钥
-        ├── dav.rs                    # HTTPS WebDAV 和读写探测
-        ├── engine.rs                 # 操作上传、下载与连续游标
-        ├── pairing.rs                # 邀请、批准、撤销与密钥轮换
-        └── control.rs                # 可信设备名册传播
-src-tauri/
-├── Cargo.toml                         # 桌面壳与 Windows 依赖
-├── build.rs                           # Tauri 资源构建
-├── tauri.conf.json                    # 窗口、内容策略与安装包配置
-├── capabilities/default.json          # 原生对话框权限
-├── icons/
-│   ├── icon.ico                       # Windows 程序图标
-│   └── icon.png                       # 通用程序图标
-└── src/
-    ├── main.rs                        # 平台启动入口
-    ├── app.rs                         # Tauri 命令、单实例与后台同步
-    ├── runtime.rs                     # 同步装配、文件及本机设置
-    ├── secrets.rs                     # Windows DPAPI 密钥封装
-    ├── platform.rs                    # 能力检测与 Hello 验证
-    └── platform/
-        ├── ocr.rs                     # 图片解码与本机文字识别
-        └── notifications.rs           # 通知授权、来源与读取
-contracts/
-├── PROTOCOL.md                        # 跨端协议和精确认证字节
-├── schema/
-│   ├── envelope.schema.json           # 密文信封结构
-│   └── operation.schema.json          # 账务操作结构
-└── examples/
-    ├── operation.json                 # 合成操作示例
-    └── crypto-vector.json             # 固定合成密码测试向量
-packaging/windows/
-├── AppxManifest.xml                   # MSIX 包身份与能力声明
-└── Assets/
-    ├── StoreLogo.png                  # 包图标
-    ├── Square44x44Logo.png             # 小尺寸应用图标
-    └── Square150x150Logo.png           # 应用图块图标
-scripts/
-├── check-platform.sh                  # Windows API 独立类型检查
-├── check-ui.mjs                       # 金额精度和转义自检
-└── windows-msix.ps1                    # MSIX 构建与证书签名
+├── Windows/
+│   ├── DEVELOPMENT.md  # 本平台开发入口与状态
+│   ├── package.json  # 本平台 npm 命令入口
+│   ├── packaging/
+│   │   ├── AppxManifest.xml  # MSIX 包身份与能力声明
+│   │   └── Assets/
+│   │       ├── Square150x150Logo.png  # 应用图标资源
+│   │       ├── Square44x44Logo.png  # 应用图标资源
+│   │       └── StoreLogo.png  # 应用图标资源
+│   ├── scripts/
+│   │   ├── check-platform.sh  # Windows API 独立类型检查
+│   │   └── windows-msix.ps1  # Windows MSIX 打包签名
+│   └── src-tauri/
+│       ├── Cargo.toml  # 本模块 Rust 依赖与源码入口
+│       ├── capabilities/
+│       │   └── default.json  # 本平台原生命令权限
+│       ├── src/
+│       │   ├── main.rs  # Windows 可执行程序入口
+│       │   ├── platform/
+│       │   │   ├── notifications.rs  # 通知授权与读取
+│       │   │   ├── ocr.rs  # 本机图片识别
+│       │   │   └── windows.rs  # Windows 能力检测与验证
+│       │   └── secrets_windows.rs  # Windows DPAPI 封装
+│       └── tauri.conf.json  # 本平台窗口与构建配置
+├── linux/
+│   └── DEVELOPMENT.md  # 本平台开发入口与状态
+├── Android/
+│   ├── DEVELOPMENT.md  # 本平台开发入口与状态
+│   ├── package.json  # 本平台 npm 命令入口
+│   ├── scripts/
+│   │   └── android.sh  # Android SDK 与构建入口
+│   ├── src-tauri/
+│   │   ├── Cargo.toml  # 本模块 Rust 依赖与源码入口
+│   │   ├── capabilities/
+│   │   │   └── default.json  # 本平台原生命令权限
+│   │   ├── gen/
+│   │   │   └── android/
+│   │   │       ├── .editorconfig  # 生成工程编辑格式
+│   │   │       ├── .gitignore  # 构建产物与本地配置排除规则
+│   │   │       ├── app/
+│   │   │       │   ├── .gitignore  # 构建产物与本地配置排除规则
+│   │   │       │   ├── build.gradle.kts  # Android Gradle 构建配置
+│   │   │       │   ├── proguard-rules.pro  # 代码压缩规则
+│   │   │       │   └── src/
+│   │   │       │       └── main/
+│   │   │       │           ├── AndroidManifest.xml  # Android 组件及权限声明
+│   │   │       │           ├── java/
+│   │   │       │           │   └── com/
+│   │   │       │           │       └── yakit/
+│   │   │       │           │           └── lightledger/
+│   │   │       │           │               └── MainActivity.kt  # Android Activity 入口
+│   │   │       │           └── res/
+│   │   │       │               ├── drawable/
+│   │   │       │               │   └── ic_launcher_background.xml  # 启动图标背景
+│   │   │       │               ├── drawable-v24/
+│   │   │       │               │   └── ic_launcher_foreground.xml  # 启动图标前景
+│   │   │       │               ├── layout/
+│   │   │       │               │   └── activity_main.xml  # Android 容器布局
+│   │   │       │               ├── mipmap-hdpi/
+│   │   │       │               │   ├── ic_launcher.png  # Android 启动图标
+│   │   │       │               │   ├── ic_launcher_foreground.png  # Android 启动图标
+│   │   │       │               │   └── ic_launcher_round.png  # Android 启动图标
+│   │   │       │               ├── mipmap-mdpi/
+│   │   │       │               │   ├── ic_launcher.png  # Android 启动图标
+│   │   │       │               │   ├── ic_launcher_foreground.png  # Android 启动图标
+│   │   │       │               │   └── ic_launcher_round.png  # Android 启动图标
+│   │   │       │               ├── mipmap-xhdpi/
+│   │   │       │               │   ├── ic_launcher.png  # Android 启动图标
+│   │   │       │               │   ├── ic_launcher_foreground.png  # Android 启动图标
+│   │   │       │               │   └── ic_launcher_round.png  # Android 启动图标
+│   │   │       │               ├── mipmap-xxhdpi/
+│   │   │       │               │   ├── ic_launcher.png  # Android 启动图标
+│   │   │       │               │   ├── ic_launcher_foreground.png  # Android 启动图标
+│   │   │       │               │   └── ic_launcher_round.png  # Android 启动图标
+│   │   │       │               ├── mipmap-xxxhdpi/
+│   │   │       │               │   ├── ic_launcher.png  # Android 启动图标
+│   │   │       │               │   ├── ic_launcher_foreground.png  # Android 启动图标
+│   │   │       │               │   └── ic_launcher_round.png  # Android 启动图标
+│   │   │       │               ├── values/
+│   │   │       │               │   ├── colors.xml  # Android 容器颜色
+│   │   │       │               │   ├── strings.xml  # Android 应用文字
+│   │   │       │               │   └── themes.xml  # Android 原生容器主题
+│   │   │       │               ├── values-night/
+│   │   │       │               │   └── themes.xml  # Android 原生容器主题
+│   │   │       │               └── xml/
+│   │   │       │                   ├── data_extraction_rules.xml  # 系统备份与迁移排除
+│   │   │       │                   └── file_paths.xml  # 文件提供器路径
+│   │   │       ├── build.gradle.kts  # Android Gradle 构建配置
+│   │   │       ├── buildSrc/
+│   │   │       │   ├── build.gradle.kts  # Android Gradle 构建配置
+│   │   │       │   └── src/
+│   │   │       │       └── main/
+│   │   │       │           └── java/
+│   │   │       │               └── com/
+│   │   │       │                   └── yakit/
+│   │   │       │                       └── lightledger/
+│   │   │       │                           └── kotlin/
+│   │   │       │                               ├── BuildTask.kt  # Gradle 调用 Tauri 构建
+│   │   │       │                               └── RustPlugin.kt  # Rust ABI 构建任务
+│   │   │       ├── gradle/
+│   │   │       │   └── wrapper/
+│   │   │       │       ├── gradle-wrapper.jar  # Gradle Wrapper 执行器
+│   │   │       │       └── gradle-wrapper.properties  # Gradle 发行版配置
+│   │   │       ├── gradle.properties  # Gradle 参数
+│   │   │       ├── gradlew  # Gradle Unix 启动器
+│   │   │       ├── gradlew.bat  # Gradle Windows 启动器
+│   │   │       └── settings.gradle  # Android 模块装配
+│   │   ├── src/
+│   │   │   └── platform.rs  # Android 能力声明
+│   │   └── tauri.conf.json  # 本平台窗口与构建配置
+│   └── tauri-plugin-device/
+│       ├── Cargo.toml  # 本模块 Rust 依赖与源码入口
+│       ├── android/
+│       │   ├── build.gradle.kts  # Android Gradle 构建配置
+│       │   └── src/
+│       │       └── main/
+│       │           ├── AndroidManifest.xml  # Android 组件及权限声明
+│       │           └── java/
+│       │               └── DevicePlugin.kt  # Keystore 与系统文件适配
+│       ├── build.rs  # Android 原生插件构建
+│       └── src/
+│           └── lib.rs  # Android Kotlin 插件桥
+├── ios/
+│   └── DEVELOPMENT.md  # 本平台开发入口与状态
+├── shared/
+│   ├── app/
+│   │   ├── build.rs  # Tauri 平台资源构建
+│   │   ├── icons/
+│   │   │   ├── icon.ico  # 应用图标资源
+│   │   │   └── icon.png  # 应用图标资源
+│   │   └── src/
+│   │       ├── app.rs  # 共享 Tauri 命令与启动装配
+│   │       ├── files.rs  # 跨平台文件与备份中转
+│   │       ├── lib.rs  # 公共应用库及平台选择
+│   │       ├── runtime.rs  # 共享同步和设备状态
+│   │       └── secrets.rs  # 共用密钥文件读写
+│   ├── contracts/
+│   │   ├── PROTOCOL.md  # 同步协议及认证字节
+│   │   ├── examples/
+│   │   │   ├── crypto-vector.json  # 固定密码验证向量
+│   │   │   └── operation.json  # 合成操作示例
+│   │   └── schema/
+│   │       ├── envelope.schema.json  # 密文信封结构
+│   │       └── operation.schema.json  # 账务操作结构
+│   ├── crates/
+│   │   ├── ledger-core/
+│   │   │   ├── Cargo.toml  # 本模块 Rust 依赖与源码入口
+│   │   │   ├── examples/
+│   │   │   │   └── dev_bridge.rs  # 临时账本开发服务
+│   │   │   └── src/
+│   │   │       ├── capture.rs  # 文本解析和来源去重
+│   │   │       ├── commands.rs  # 账务命令分发
+│   │   │       ├── lib.rs  # SQLCipher、事务及核心自检
+│   │   │       ├── queries.rs  # 分页查询与统计
+│   │   │       ├── sync.rs  # 账务操作及字段合并
+│   │   │       ├── transfer.rs  # 导入导出与密码备份
+│   │   │       └── workflow.rs  # 候选、冲突和来源保留
+│   │   └── ledger-sync/
+│   │       ├── Cargo.toml  # 本模块 Rust 依赖与源码入口
+│   │       └── src/
+│   │           ├── control.rs  # 设备名册传播
+│   │           ├── crypto.rs  # 加密信封和签名
+│   │           ├── dav.rs  # WebDAV 探测及读写
+│   │           ├── engine.rs  # 上传下载和连续游标
+│   │           ├── lib.rs  # 同步模块入口及协议自检
+│   │           └── pairing.rs  # 邀请与密钥轮换
+│   └── ui/
+│       ├── bridge.ts  # 原生命令和开发连接
+│       ├── components/
+│       │   ├── analysis.ts  # 日期筛选和分析显示
+│       │   ├── devices.ts  # 设备邀请与配对
+│       │   ├── editor.ts  # 账单编辑和文本确认
+│       │   ├── files.ts  # 文件导入导出和备份入口
+│       │   ├── pending.ts  # 待办确认与审批
+│       │   ├── platform.ts  # 平台能力和应用锁界面
+│       │   ├── rules.ts  # 分类规则设置
+│       │   ├── settings.ts  # 设置页面装配
+│       │   ├── sync-status.ts  # 同步状态和结果提示
+│       │   ├── transactions.ts  # 账单列表及操作
+│       │   └── ui.ts  # 通用弹窗和表单
+│       ├── env.d.ts  # 前端环境类型
+│       ├── index.html  # 共享 WebView 页面入口
+│       ├── main.ts  # 导航与页面装配
+│       ├── style.css  # 全部页面共用主题与动效
+│       └── types.ts  # 类型、金额格式和文本转义
+├── .github/
+│   └── workflows/
+│       ├── android.yml  # Android 调试包 CI
+│       └── windows.yml  # Windows 编译及安装包 CI
+├── .gitignore  # 构建产物与本地配置排除规则
+├── AGENTS.md  # 项目开发与验收约定
+├── Cargo.lock  # Rust 锁定依赖
+├── Cargo.toml  # Rust 工作区与平台包路径
+├── Public.md  # 工程与接口说明
+├── README.md  # 安装和使用说明
+├── package-lock.json  # Node 锁定依赖
+├── package.json  # 根依赖与各平台命令
+├── scripts/
+│   └── check-ui.mjs  # 金额和转义自检
+├── tsconfig.json  # TypeScript 检查选项
+└── vite.config.ts  # 共享页面构建与服务
 ```
 
-设计文档保留在本地并由 `.gitignore` 排除；当前实现路线见本文件，功能规划见 `轻账-Windows设计与技术方案.md`。Rust crate 默认构建目标为核心与同步，Windows 桌面壳独立构建。
+设计文档保留在本地并由 `.gitignore` 排除；当前实现路线见本文件，功能规划见 `轻账-Windows设计与技术方案.md`。Rust 工作区默认构建共享核心与同步；Windows 和 Android 使用独立 Cargo 包，Linux 和 iOS 当前仅保留开发目录。
 
 ## 加载与数据流
 
 1. Tauri 创建统一窗口并加载打包后的本地页面。
-2. Rust 定位当前用户的应用数据目录，通过 DPAPI 解封数据库密钥；首次运行创建随机密钥。
+2. 平台入口编译同一份 `shared/app` 装配代码，Rust 定位本机应用数据目录。Windows 通过 DPAPI、Android 通过 Keystore 解封数据库密钥；首次运行创建随机密钥。
 3. SQLCipher 校验加密支持并打开数据库，恢复本人成员、设备身份和本地状态。
 4. 前端调用 `ledger_command` 查询账单、汇总和待处理内容；空账本显示记账和导入入口。
 5. 用户命令进入 Rust 校验，数据库变更、历史和 Outbox 在同一事务中提交；失败回滚。CSV/JSON 导入按行使用保存点，失败行回滚，其余有效行保留并报告行号。
 6. 已配置 WebDAV 时启动后及每 60 秒补同步；网络操作在账务锁之外执行，每次读取或应用操作时短暂持有账务锁。关闭窗口即退出，不持续后台采集。
-7. 图片识别和系统通知经 Windows 适配层转换为候选输入，确认关键字段后进入相同账务路径。
+7. 图片识别和系统通知经 Windows 适配层转换为候选输入，确认关键字段后进入相同账务路径。Android 文件选择器的 `content://` 地址由 Kotlin 插件读取，按返回的真实文件名判断导入格式；备份只中转已加密内容并清理暂存目录。
 
 ### 账务边界
 
@@ -129,7 +244,7 @@ scripts/
 
 WebDAV 使用 HTTPS。配置探测包含目录读取、临时对象写入、读取比对和清理。同步文件加密并认证设备身份，上传失败重试使用原操作的相同密文字节；远端操作经过认证、空间和成员校验后才能进入账务层。
 
-本机数据库密钥与同步凭据通过 Windows 当前用户的 DPAPI 保护。备份使用独立恢复密码；不要把应用数据目录中的设备密钥文件作为跨设备导入方式。
+本机数据库密钥与同步凭据在 Windows 上通过当前用户的 DPAPI 保护，在 Android 上通过 Keystore 保护。备份使用独立恢复密码；不要把应用数据目录中的设备密钥文件作为跨设备导入方式。
 
 ## 设置与主题
 
@@ -198,28 +313,30 @@ console.log(records);
 | `approveSharedDelete` / `approveModification` | 待办 `id`、`approve` 布尔值 | 由当前已认证成员完成对应确认 |
 | `exportBackup` / `restoreBackup` | `path`、`password` | 导出 / 恢复结果；错误通过 rejected Promise 返回 |
 
-内部同步应用和身份变更动作只允许受信任的原生装配层调用，不能由页面自由指定成员身份。`syncStatus` 返回 `configured`、`paused`、`lastSync`、设备指纹与空间名册，不返回密码或空间密钥。序列化细节与密文格式以 `contracts/` 为准。
+内部同步应用和身份变更动作只允许受信任的原生装配层调用，不能由页面自由指定成员身份。`syncStatus` 返回 `configured`、`paused`、`lastSync`、设备指纹与空间名册，不返回密码或空间密钥。序列化细节与密文格式以 `shared/contracts/` 为准。
 
 ## 当前接入状态
 
 | 项目 | 状态 |
 | --- | --- |
 | Rust 核心与前端 | 已实现；前端生产构建与 Rust 核心/同步自检通过 |
-| 本地加密与备份 | 已接入 SQLCipher、密码备份和 DPAPI 适配 |
+| 本地加密与备份 | 共用 SQLCipher 与密码备份；Windows 接入 DPAPI，Android 接入 Keystore 和文件中转 |
 | WebDAV 与操作加密 | 已实现网络协议与加密模块，模拟服务验证已通过 |
 | Windows OCR / 通知 / Hello | 已实现 Windows API 适配，独立 MSVC 目标类型检查通过，运行行为待 Windows 实机验收 |
 | 普通安装程序 | 配置了 Tauri NSIS/MSI 构建；不会自动获得 MSIX 包身份 |
 | MSIX | 提供清单及构建签名脚本，需 Windows SDK 和已有受信任发布证书 |
 | Windows 整体构建 | 当前 Linux 缺少 MSVC 原生工具，整体构建及安装运行尚未验证；已提供 Windows CI |
-| 尚未接入 | Android 客户端、跨端双向联调、持续通知监听、托盘后台、开机启动、远端快照与日志压缩 |
+| Android | 已有 Gradle 工程、移动端页面、Keystore 与文件插件；检查点 `c0495de` 的 APK 构建存在 Tauri 运行时版本不兼容，需继续修复和实机验证 |
+| Linux / iOS | 已分配开发目录，尚未接入原生入口和打包 |
+| 尚未接入 | 跨端双向联调、持续通知监听、托盘后台、开机启动、远端快照与日志压缩 |
 | 账务待完善 | 转账目前仅作独立流水，不维护收付款双账户余额；共同删除后没有共同回收站恢复或到期物理清理；来源模板、识别置信度和专门账户澄清状态机未实现 |
-| WebView 交互验收 | 子代理直连 IAB 被工具限制阻断，按项目规则交人工验收 |
+| WebView 迁移验收 | 已在本窗口内置浏览器验证首页 → 设置 → 账单 → 首页导航，页面加载与临时账本连接正常；系统功能仍由原生端验收 |
 
-当前 IAB 错误为 `IAB visibility is not supported in a subagent thread`；未取得页面状态，不能将前端编译或后端自测称为 UI 验收通过。
+平台拆分复用同一份界面和业务源码。Windows 与 Android 各有独立配置、权限和 Cargo 包，共享库通过 `cfg` 引入对应平台适配；Linux 和 iOS 目录记录接入位置。
 
 ## 开发与验证
 
-界面只修改 `frontend/`；账务与同步分别位于两个 Rust crate；系统能力位于 `src-tauri/`。改变跨层契约时先对齐动作、参数和错误语义，再分别修改相关层。中文注释说明业务限制和系统边界。
+界面修改位于 `shared/ui/`；账务与同步分别位于 `shared/crates/`；Tauri 装配位于 `shared/app/`；系统能力由各平台目录维护。改变跨层契约时先对齐动作、参数和错误语义，再分别修改相关层。中文注释说明业务限制和系统边界。
 
 | 命令或脚本 | 用途 | 环境 |
 | --- | --- | --- |
@@ -228,12 +345,16 @@ console.log(records);
 | `cargo test --locked -p lightledger-core -p lightledger-sync` | 核心和同步内置自检 | Rust 与本地 C/Perl 工具链 |
 | `node --experimental-strip-types scripts/check-ui.mjs` | 金额精度、币种小数位及 HTML 转义检查 | Node.js 22 |
 | `cargo fmt --all --check` | 检查 Rust 格式 | Rustfmt |
-| `npm run tauri -- dev` | 运行 Windows 桌面开发程序 | Windows |
-| `npm run tauri -- build --bundles nsis` | 生成 Windows 安装程序 | Windows |
-| `scripts/check-platform.sh` | 独立检查 Windows 平台 API 类型 | Rust Windows MSVC target |
-| `scripts/windows-msix.ps1` | 构建带包身份的签名 MSIX | Windows SDK 与已有证书 |
+| `cargo metadata --locked --no-deps --format-version 1` | 检查平台与共享包的路径解析 | Rust |
+| `npm run android:build -- --ci -- --locked` | 构建 ARM64 调试包 | JDK 17、Android SDK/NDK |
+| `npm run tauri:windows -- dev` | 运行 Windows 桌面开发程序 | Windows |
+| `npm run tauri:windows -- build --bundles nsis` | 生成 Windows 安装程序 | Windows |
+| `Windows/scripts/check-platform.sh` | 独立检查 Windows 平台 API 类型 | Rust Windows MSVC target |
+| `Windows/scripts/windows-msix.ps1` | 构建带包身份的签名 MSIX | Windows SDK 与已有证书 |
 
-2026-09-10 复测代码提交 `179a920`，环境为 Linux x86_64、Rust 1.97.1、Node.js 22.22.2：
+2026-09-10 目录迁移验证：前端构建、金额检查、Rust 格式、Cargo 路径解析及 Windows API 类型检查通过；共享核心 6/6、同步 2/2、Windows/Android 文件与备份中转各 1/1 通过。本窗口内置浏览器已完成首页、设置、账单页面切换。Tauri 构建钩子也已实际验证：从平台原生目录以 `cwd=../..` 调用根前端构建，避免重复进入平台构建命令。本次未改业务与 UI 行为，Android 原有依赖兼容问题由 Android 开发任务继续处理。
+
+迁移前代码 `179a920` 的原生构建记录（Linux x86_64、Rust 1.97.1、Node.js 22.22.2）：
 
 | 检查 | 本次结果 |
 | --- | --- |
@@ -241,7 +362,7 @@ console.log(records);
 | `node --experimental-strip-types scripts/check-ui.mjs` | 金额精度、币种小数位和文本转义通过 |
 | `cargo fmt --all --check` | 通过 |
 | `cargo test --locked -p lightledger-core -p lightledger-sync -- --nocapture` | 核心 6/6、同步 2/2 通过，无失败；分别耗时 12.03 秒、26.62 秒 |
-| `CARGO_NET_OFFLINE=true scripts/check-platform.sh` | Windows OCR、通知与 Hello 平台模块的独立 MSVC 目标类型检查通过 |
+| `CARGO_NET_OFFLINE=true Windows/scripts/check-platform.sh` | Windows OCR、通知与 Hello 平台模块的独立 MSVC 目标类型检查通过 |
 | `cargo check --locked -p lightledger-app --target x86_64-pc-windows-msvc` | 退出码 101；OpenSSL/ring 原生构建失败，明确报错缺少 `lib.exe`，尚不能确认 Windows 整体编译通过 |
 | 浏览器交互 | 子代理直连 IAB 返回 `IAB visibility is not supported in a subagent thread`；已停止，未读取页面或执行操作 |
 
@@ -252,7 +373,7 @@ console.log(records);
 MSIX 构建示例（证书已放在当前用户证书库，目标设备已信任签发链）：
 
 ```powershell
-.\scripts\windows-msix.ps1 -CertificateThumbprint $CertificateThumbprint
+.\Windows\scripts\windows-msix.ps1 -CertificateThumbprint $CertificateThumbprint
 ```
 
 脚本查找 Windows SDK 的 MakeAppx/SignTool，构建、打包、签名并验证，结果位于 `artifacts/`。需要用户提供真实发布证书指纹；脚本不会安装或信任新证书。普通 NSIS/MSI 包不提供 OCR/通知所需的 MSIX 包身份。

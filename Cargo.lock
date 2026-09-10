@@ -2275,7 +2275,7 @@ dependencies = [
 ]
 
 [[package]]
-name = "lightledger-app"
+name = "lightledger-android"
 version = "0.1.0"
 dependencies = [
  "base64 0.22.1",
@@ -2287,6 +2287,21 @@ dependencies = [
  "tauri",
  "tauri-build",
  "tauri-plugin-device",
+ "tauri-plugin-dialog",
+]
+
+[[package]]
+name = "lightledger-app"
+version = "0.1.0"
+dependencies = [
+ "base64 0.22.1",
+ "lightledger-core",
+ "lightledger-sync",
+ "rand 0.8.5",
+ "serde",
+ "serde_json",
+ "tauri",
+ "tauri-build",
  "tauri-plugin-dialog",
  "tauri-plugin-single-instance",
  "windows 0.62.2",

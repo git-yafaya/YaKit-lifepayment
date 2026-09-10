@@ -3,9 +3,9 @@ import { defineConfig } from 'vite';
 declare const process: { env: Record<string, string | undefined> };
 const host = process.env.TAURI_DEV_HOST;
 export default defineConfig({
-  root: 'frontend',
+  root: 'shared/ui',
   clearScreen: false,
-  build: { outDir: '../dist', emptyOutDir: true },
+  build: { outDir: '../../dist', emptyOutDir: true },
   server: {
     host: host || '127.0.0.1',
     port: 1420,

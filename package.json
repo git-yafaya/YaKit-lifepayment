@@ -7,9 +7,11 @@
     "dev": "vite --port 1420 --strictPort",
     "build": "tsc --noEmit && vite build",
     "preview": "vite preview --host 127.0.0.1",
-    "tauri": "tauri",
-    "android:dev": "bash scripts/android.sh dev",
-    "android:build": "bash scripts/android.sh build --debug --apk --target aarch64"
+    "tauri": "npm --prefix Windows run tauri --",
+    "android:dev": "bash Android/scripts/android.sh dev",
+    "android:build": "bash Android/scripts/android.sh build --debug --apk --target aarch64",
+    "tauri:windows": "npm --prefix Windows run tauri --",
+    "tauri:android": "npm --prefix Android run tauri --"
   },
   "dependencies": {
     "@tauri-apps/api": "2.10.1",
