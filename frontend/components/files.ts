@@ -4,9 +4,9 @@ import { escape } from '../types';
 import { modal, field, message } from './ui';
 export async function importFile(refresh:()=>Promise<void>) {
   const path = await open({multiple:false,filters:[{name:'账单文件',extensions:['csv','json']}]}); if(!path) return;
-  const {text} = await system<{text:string}>('readFile',{path});
+  const {text,name} = await system<{text:string;name?:string}>('readFile',{path});
   modal('确认导入文件', `<p>将使用标准账单模板导入。相同捕获来源会去重；不能识别的行保留错误。</p><p>文件长度：${text.length.toLocaleString()} 字符</p><label>内容预览<textarea readonly rows="8"></textarea></label>`, '开始导入',async()=>{
-    const result = await ledger<Array<{status:string;message:string;row?:number}>>(path.toLowerCase().endsWith('.csv')?'importCsv':'importJson',{text});
+    const result = await ledger<Array<{status:string;message:string;row?:number}>>((name||path).toLowerCase().endsWith('.csv')?'importCsv':'importJson',{text});
     const counts:Record<string,number>={};result.forEach(r=>counts[r.status]=(counts[r.status]||0)+1);const labels:Record<string,string>={created:'新增',existing:'已存在',failed:'失败',duplicate:'疑似重复',needsConfirmation:'待确认',pending:'待确认'};message(`导入完成：${Object.entries(counts).map(([k,v])=>`${labels[k]||k} ${v} 笔`).join('，')}`);await refresh();const failures=result.map((r,i)=>({...r,row:r.row||i+1})).filter(r=>r.status==='failed');if(failures.length)setTimeout(()=>modal('导入失败的行',failures.map(r=>`<p>第 ${r.row} 行：${escape(r.message)}</p>`).join(''),'完成',async()=>{}),0);
   });
   document.querySelector<HTMLTextAreaElement>('dialog textarea')!.value=text.slice(0,8000);

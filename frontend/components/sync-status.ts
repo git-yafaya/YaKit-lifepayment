@@ -10,7 +10,7 @@ function outcome(result:SyncResult){
  return {errors,text:spaces.length?`已完成 ${success} 个账本空间${errors.length?`，${spaces.length-success} 个空间需要处理`:'，全部同步成功'}`:'尚无同步结果'};
 }
 export async function syncStatus(host:HTMLElement){
- if(!desktop){host.innerHTML='<p class="muted">请在 Windows 桌面应用中配置和查看同步。</p>';return;}
+ if(!desktop){host.innerHTML='<p class="muted">请在轻账应用中配置和查看同步。</p>';return;}
  try{
   const state=await system<SyncStatus>('syncStatus');const last=state.lastSync;
   const paused=state.paused||Boolean(last?.pausedSpaces?.length);

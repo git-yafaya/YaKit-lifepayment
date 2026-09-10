@@ -2286,6 +2286,7 @@ dependencies = [
  "serde_json",
  "tauri",
  "tauri-build",
+ "tauri-plugin-device",
  "tauri-plugin-dialog",
  "tauri-plugin-single-instance",
  "windows 0.62.2",
@@ -4616,6 +4617,16 @@ dependencies = [
  "serde_json",
  "tauri-utils",
  "walkdir",
+]
+
+[[package]]
+name = "tauri-plugin-device"
+version = "0.1.0"
+dependencies = [
+ "base64 0.22.1",
+ "serde_json",
+ "tauri",
+ "tauri-plugin",
 ]
 
 [[package]]

@@ -4,16 +4,25 @@ import { escape, type Transaction } from '../types';
 import { editTransaction } from './editor';
 import { message, modal, run } from './ui';
 interface Preferences{appLockEnabled:boolean;notificationSources:string[]}
-interface Capabilities{packaged:boolean;ocr:{available:boolean;reason:string};notifications:{available:boolean;access:string};hello:{available:boolean}}
+interface Capabilities{platform?:string;packaged:boolean;ocr:{available:boolean;reason:string};notifications:{available:boolean;access:string;reason?:string};hello:{available:boolean;reason?:string}}
+// 只调整入口的可用状态，识别和保存仍由原有流程处理。
+export async function imageImportAvailability(button:HTMLButtonElement){
+ if(!desktop)return;
+ const caps=await system<Capabilities>('capabilities');
+ if(caps.ocr?.available)return;
+ button.disabled=true;
+ const note=document.createElement('p');note.id='image-import-note';note.textContent=caps.ocr?.reason||'此设备暂不支持截图识别，请使用文字记账或导入账单。';
+ button.setAttribute('aria-describedby',note.id);button.parentElement!.after(note);
+}
 export async function imageImport(refresh:()=>Promise<void>){
  const path=await open({multiple:false,filters:[{name:'账单截图',extensions:['png','jpg','jpeg','bmp','tif','tiff']}]});if(!path)return;
  const result=await system<{text:string;captureId?:string}>('ocrImage',{path});
  modal('核对图片识别文字','<p>确认原文后，再补充或修正金额、时间和付款账户。</p><label>识别内容<textarea name="text" rows="8" required></textarea></label>','继续确认账单',async data=>{const parsed=await ledger<{draft:Partial<Transaction>;missingFields:string[]}>('parseText',{text:data.get('text')});setTimeout(()=>void run(()=>editTransaction(refresh,{...parsed.draft,captureId:result.captureId},parsed.missingFields)),0);});document.querySelector<HTMLTextAreaElement>('dialog textarea')!.value=result.text;
 }
 export async function privacy(host:HTMLElement,refresh:()=>Promise<void>){
- if(!desktop){host.innerHTML='<h2>本机能力</h2><p class="muted">通知、截图识别和 Windows Hello 需要在 Windows 应用中使用。</p>';return;}
- const caps=await system<Capabilities>('capabilities');const prefs=await system<Preferences>('deviceSettings');
- host.innerHTML=`<h2>隐私与自动录入</h2><div class="setting-row"><div><strong>截图识别</strong><p>${caps.ocr?.available?'使用本机中文识别组件，图片不会上传。':escape(caps.ocr?.reason||'此设备暂不可用')}</p></div><button id="ocr" ${caps.ocr?.available?'':'disabled'}>导入截图</button></div><div class="setting-row"><div><strong>通知录入</strong><p>仅主动读取你选择的来源，不清除系统通知。</p></div><button id="notifications" ${caps.notifications?.available?'':'disabled'}>授权与选择来源</button></div><div class="setting-row"><div><strong>应用锁</strong><p>${caps.hello?.available?'用 Windows Hello 验证后打开账本。':'请先在 Windows 设置中配置 PIN 或 Windows Hello。'}</p></div><button id="lock-enable" ${caps.hello?.available?'':'disabled'}>${prefs.appLockEnabled?'关闭应用锁':'开启应用锁'}</button></div>${prefs.appLockEnabled?'<button id="lock-now">立即锁定</button>':''}<div class="setting-row"><div><strong>关闭窗口后退出</strong><p>后台保留与开机启动未开启。</p></div><span class="pill">默认</span></div>`;
+ if(!desktop){host.innerHTML='<h2>本机能力</h2><p class="muted">通知、截图识别和应用锁需要在轻账应用中查看设备支持情况。</p>';return;}
+ const caps=await system<Capabilities>('capabilities');const prefs=await system<Preferences>('deviceSettings');const android=caps.platform==='android';
+ host.innerHTML=`<h2>隐私与自动录入</h2><div class="setting-row"><div><strong>截图识别</strong><p>${caps.ocr?.available?'使用本机中文识别组件，图片不会上传。':escape(caps.ocr?.reason||'此设备暂不可用')}</p></div><button id="ocr" ${caps.ocr?.available?'':'disabled'}>导入截图</button></div><div class="setting-row"><div><strong>通知录入</strong><p>${caps.notifications?.available?'仅主动读取你选择的来源，不清除系统通知。':escape(caps.notifications?.reason||'此设备暂不支持通知录入。')}</p></div><button id="notifications" ${caps.notifications?.available?'':'disabled'}>授权与选择来源</button></div><div class="setting-row"><div><strong>应用锁</strong><p>${caps.hello?.available?(android?'验证身份后打开账本。':'用 Windows Hello 验证后打开账本。'):escape(caps.hello?.reason||(android?'Android 应用锁尚未接入。':'请先在 Windows 设置中配置 PIN 或 Windows Hello。'))}</p></div><button id="lock-enable" ${caps.hello?.available?'':'disabled'}>${prefs.appLockEnabled?'关闭应用锁':'开启应用锁'}</button></div>${prefs.appLockEnabled?'<button id="lock-now">立即锁定</button>':''}${android?'':'<div class="setting-row"><div><strong>关闭窗口后退出</strong><p>后台保留与开机启动未开启。</p></div><span class="pill">默认</span></div>'}`;
  host.querySelector<HTMLButtonElement>('#ocr')!.onclick=()=>void run(()=>imageImport(refresh));host.querySelector<HTMLButtonElement>('#notifications')!.onclick=()=>void run(()=>notifications(refresh,prefs));
  host.querySelector<HTMLButtonElement>('#lock-enable')!.onclick=()=>void run(async()=>{await system('helloVerify');await system('saveDeviceSettings',{...prefs,appLockEnabled:!prefs.appLockEnabled});await privacy(host,refresh);message(prefs.appLockEnabled?'应用锁已关闭':'应用锁已开启，下次打开应用需要验证');});
  host.querySelector<HTMLButtonElement>('#lock-now')?.addEventListener('click',lock);

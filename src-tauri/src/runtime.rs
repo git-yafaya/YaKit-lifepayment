@@ -1,4 +1,4 @@
-use crate::{platform, secrets};
+use crate::{files, platform, secrets};
 use lightledger_core::LedgerService;
 use lightledger_sync::{
     crypto::{Identity, Space},
@@ -52,7 +52,7 @@ impl Runtime {
     }
     pub(crate) fn save(&self) -> Result<(), String> {
         secrets::write(
-            &self.dir.join("sync.dpapi"),
+            &self.dir.join(secrets::VAULT_FILE),
             &serde_json::to_vec(&self.vault).map_err(|e| e.to_string())?,
         )
     }
@@ -71,27 +71,27 @@ impl Runtime {
                 Ok(self.vault.device_settings.clone())
             }
             "ocrImage" => {
-                let path = PathBuf::from(text("path"));
-                if std::fs::metadata(&path).map_err(|e| e.to_string())?.len() > 20 * 1024 * 1024 {
-                    return Err("图片不能超过20MB".into());
+                #[cfg(target_os = "android")]
+                return platform::dispatch(action, &p);
+                #[cfg(windows)]
+                {
+                    let path = PathBuf::from(text("path"));
+                    if std::fs::metadata(&path).map_err(|e| e.to_string())?.len() > 20 * 1024 * 1024
+                    {
+                        return Err("图片不能超过20MB".into());
+                    }
+                    let bytes = std::fs::read(path).map_err(|e| e.to_string())?;
+                    let mut result = platform::dispatch(action, &p)?;
+                    result["captureId"] = json!(format!(
+                        "image:{}",
+                        lightledger_sync::crypto::digest(&bytes)
+                    ));
+                    Ok(result)
                 }
-                let bytes = std::fs::read(path).map_err(|e| e.to_string())?;
-                let mut result = platform::dispatch(action, &p)?;
-                result["captureId"] = json!(format!(
-                    "image:{}",
-                    lightledger_sync::crypto::digest(&bytes)
-                ));
-                Ok(result)
             }
-            "readFile" => {
-                let path = PathBuf::from(text("path"));
-                if std::fs::metadata(&path).map_err(|e| e.to_string())?.len() > 20 * 1024 * 1024 {
-                    return Err("导入文件不能超过20MB".into());
-                }
-                Ok(json!({"text":std::fs::read_to_string(path).map_err(|e|e.to_string())?}))
-            }
+            "readFile" => files::read_text(text("path")),
             "saveFile" => {
-                std::fs::write(text("path"), text("text")).map_err(|e| e.to_string())?;
+                files::write_text(text("path"), text("text"))?;
                 Ok(json!({"saved":true}))
             }
             "probeWebDav" => {

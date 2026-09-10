@@ -1,5 +1,7 @@
+#[cfg(windows)]
+use crate::platform;
 use crate::{
-    platform,
+    files,
     runtime::{Runtime, Vault},
     secrets,
 };
@@ -14,6 +16,7 @@ use tauri::Manager;
 struct Shared {
     ledger: Arc<Mutex<LedgerService>>,
     runtime: Arc<Mutex<Runtime>>,
+    dir: std::path::PathBuf,
 }
 #[tauri::command]
 async fn ledger_command(
@@ -36,11 +39,12 @@ async fn ledger_command(
         let runtime = state.runtime.clone();
         return tauri::async_runtime::spawn_blocking(move || {
             let mut runtime = runtime.lock().map_err(|_| "同步状态不可用")?;
-            let result = runtime
-                .ledger
-                .lock()
-                .map_err(|_| "数据库不可用")?
-                .dispatch(&action, payload)?;
+            let result = files::dispatch(
+                &mut *runtime.ledger.lock().map_err(|_| "数据库不可用")?,
+                &action,
+                payload,
+                &runtime.dir,
+            )?;
             let ids = runtime
                 .ledger
                 .lock()
@@ -80,26 +84,30 @@ async fn ledger_command(
         .map_err(|e| e.to_string())?;
     }
     let shared = state.ledger.clone();
+    let dir = state.dir.clone();
     tauri::async_runtime::spawn_blocking(move || {
-        shared
-            .lock()
-            .map_err(|_| "数据库工作线程不可用")?
-            .dispatch(&action, payload)
+        files::dispatch(
+            &mut *shared.lock().map_err(|_| "数据库工作线程不可用")?,
+            &action,
+            payload,
+            &dir,
+        )
     })
     .await
     .map_err(|e| e.to_string())?
 }
 #[tauri::command]
 async fn system_command(
-    window: tauri::Window,
+    _window: tauri::Window,
     state: tauri::State<'_, Shared>,
     action: String,
     payload: Value,
 ) -> Result<Value, String> {
+    #[cfg(windows)]
     if action == "notificationRequestAccess" || action == "helloVerify" {
-        let hwnd = window.hwnd().map_err(|e| e.to_string())?.0 as isize;
+        let hwnd = _window.hwnd().map_err(|e| e.to_string())?.0 as isize;
         let (tx, rx) = std::sync::mpsc::sync_channel(1);
-        window
+        _window
             .run_on_main_thread(move || {
                 let _ = tx.send(platform::dispatch_ui(&action, &payload, hwnd));
             })
@@ -121,27 +129,39 @@ async fn system_command(
     .map_err(|e| e.to_string())?
 }
 pub fn run() {
-    let result = tauri::Builder::default()
-        .plugin(tauri_plugin_single_instance::init(|app, _, _| {
-            if let Some(window) = app.get_webview_window("main") {
-                let _ = window.show();
-                let _ = window.set_focus();
-            }
-        }))
+    let builder = tauri::Builder::default();
+    #[cfg(target_os = "android")]
+    let builder = builder.plugin(tauri_plugin_device::init());
+    #[cfg(windows)]
+    let builder = builder.plugin(tauri_plugin_single_instance::init(|app, _, _| {
+        if let Some(window) = app.get_webview_window("main") {
+            let _ = window.show();
+            let _ = window.set_focus();
+        }
+    }));
+    let result = builder
         .plugin(tauri_plugin_dialog::init())
         .setup(|app| {
             let dir = app.path().app_local_data_dir()?;
             std::fs::create_dir_all(&dir)?;
-            let key_path = dir.join("database.dpapi");
+            // 启动时移除上次进程中断留下的加密备份暂存目录。
+            #[cfg(target_os = "android")]
+            if dir.join("backup-staging").exists() {
+                std::fs::remove_dir_all(dir.join("backup-staging"))?;
+            }
+            let key_path = dir.join(secrets::DATABASE_FILE);
             let key = if key_path.exists() {
                 secrets::read(&key_path)?
             } else {
+                if dir.join("ledger.db").exists() {
+                    return Err("数据库密钥缺失，本地账本已保留，无法继续打开".into());
+                }
                 let key = lightledger_sync::crypto::random_key();
                 secrets::write(&key_path, &key)?;
                 key
             };
             let mut ledger = LedgerService::open(&dir.join("ledger.db"), &key)?;
-            let vault_path = dir.join("sync.dpapi");
+            let vault_path = dir.join(secrets::VAULT_FILE);
             let vault = if vault_path.exists() {
                 serde_json::from_slice(&secrets::read(&vault_path)?)?
             } else {
@@ -171,7 +191,7 @@ pub fn run() {
             let runtime = Runtime {
                 ledger: ledger.clone(),
                 vault,
-                dir,
+                dir: dir.clone(),
                 last_sync: Value::Null,
                 paused: false,
                 paused_spaces: BTreeSet::new(),
@@ -189,24 +209,33 @@ pub fn run() {
                     std::thread::sleep(std::time::Duration::from_secs(60));
                 }
             });
-            app.manage(Shared { ledger, runtime });
+            app.manage(Shared {
+                ledger,
+                runtime,
+                dir,
+            });
             Ok(())
         })
         .invoke_handler(tauri::generate_handler![ledger_command, system_command])
         .run(tauri::generate_context!());
     if let Err(error) = result {
-        let title = "轻账启动失败\0".encode_utf16().collect::<Vec<_>>();
-        let message =
-            format!("无法打开轻账：{error}\n本地数据已保留。请检查 Windows 用户与数据目录。\0")
-                .encode_utf16()
-                .collect::<Vec<_>>();
-        unsafe {
-            windows_sys::Win32::UI::WindowsAndMessaging::MessageBoxW(
-                std::ptr::null_mut(),
-                message.as_ptr(),
-                title.as_ptr(),
-                windows_sys::Win32::UI::WindowsAndMessaging::MB_ICONERROR,
-            );
+        #[cfg(target_os = "android")]
+        panic!("轻账启动失败，本地数据已保留：{error}");
+        #[cfg(windows)]
+        {
+            let title = "轻账启动失败\0".encode_utf16().collect::<Vec<_>>();
+            let message =
+                format!("无法打开轻账：{error}\n本地数据已保留。请检查 Windows 用户与数据目录。\0")
+                    .encode_utf16()
+                    .collect::<Vec<_>>();
+            unsafe {
+                windows_sys::Win32::UI::WindowsAndMessaging::MessageBoxW(
+                    std::ptr::null_mut(),
+                    message.as_ptr(),
+                    title.as_ptr(),
+                    windows_sys::Win32::UI::WindowsAndMessaging::MB_ICONERROR,
+                );
+            }
         }
     }
 }

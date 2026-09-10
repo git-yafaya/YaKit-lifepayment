@@ -1,5 +1,5 @@
 [workspace]
-members = ["crates/ledger-core", "crates/ledger-sync", "src-tauri"]
+members = ["crates/ledger-core", "crates/ledger-sync", "src-tauri", "src-tauri/tauri-plugin-device"]
 default-members = ["crates/ledger-core", "crates/ledger-sync"]
 resolver = "2"
 

@@ -1,6 +1,23 @@
 {
-  "name": "lightledger", "version": "0.1.0", "private": true, "type": "module",
-  "scripts": { "dev": "vite --host 127.0.0.1 --port 1420 --strictPort", "build": "tsc --noEmit && vite build", "preview": "vite preview --host 127.0.0.1", "tauri": "tauri" },
-  "dependencies": { "@tauri-apps/api": "2.11.1", "@tauri-apps/plugin-dialog": "2.6.0" },
-  "devDependencies": { "@tauri-apps/cli": "2.11.4", "typescript": "5.9.3", "vite": "8.2.2" }
+  "name": "lightledger",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "vite --port 1420 --strictPort",
+    "build": "tsc --noEmit && vite build",
+    "preview": "vite preview --host 127.0.0.1",
+    "tauri": "tauri",
+    "android:dev": "bash scripts/android.sh dev",
+    "android:build": "bash scripts/android.sh build --debug --apk --target aarch64"
+  },
+  "dependencies": {
+    "@tauri-apps/api": "2.10.1",
+    "@tauri-apps/plugin-dialog": "2.6.0"
+  },
+  "devDependencies": {
+    "@tauri-apps/cli": "2.11.4",
+    "typescript": "5.9.3",
+    "vite": "8.2.2"
+  }
 }
