@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Package xmlns="http://schemas.microsoft.com/appx/manifest/foundation/windows10" xmlns:uap="http://schemas.microsoft.com/appx/manifest/uap/windows10" xmlns:uap3="http://schemas.microsoft.com/appx/manifest/uap/windows10/3" xmlns:rescap="http://schemas.microsoft.com/appx/manifest/foundation/windows10/restrictedcapabilities" IgnorableNamespaces="uap uap3 rescap">
+  <Identity Name="YaKit.LightLedger" Publisher="CN=LightLedger" Version="0.1.0.0" ProcessorArchitecture="x64" />
+  <Properties><DisplayName>轻账</DisplayName><PublisherDisplayName>YaKit</PublisherDisplayName><Logo>Assets\StoreLogo.png</Logo></Properties>
+  <Dependencies><TargetDeviceFamily Name="Windows.Desktop" MinVersion="10.0.22000.0" MaxVersionTested="10.0.26100.0" /></Dependencies>
+  <Resources><Resource Language="zh-cn" /></Resources>
+  <Applications><Application Id="LightLedger" Executable="lightledger-app.exe" EntryPoint="Windows.FullTrustApplication"><uap:VisualElements DisplayName="轻账" Description="本地优先的个人与共同记账助手" BackgroundColor="#F8F7F3" Square150x150Logo="Assets\Square150x150Logo.png" Square44x44Logo="Assets\Square44x44Logo.png" /></Application></Applications>
+  <Capabilities><Capability Name="internetClient" /><uap3:Capability Name="userNotificationListener" /><rescap:Capability Name="runFullTrust" /></Capabilities>
+</Package>

@@ -2,6 +2,10 @@
 node_modules/
 .cache/
 coverage/
+target/
+dist/
+artifacts/
+.vite/
 .gradle/
 **/bin/
 **/obj/
@@ -14,6 +18,8 @@ local.properties
 *.keystore
 *.jks
 *.pfx
+*.qaccount
+*.sqlite*
 
 # 本地设计、需求、配色和测试材料
 *需求*.md

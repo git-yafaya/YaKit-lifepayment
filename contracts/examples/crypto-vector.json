@@ -1,0 +1,48 @@
+{
+  "description": "Synthetic interoperability vector; keys are public test material only",
+  "envelope": {
+    "ciphertext": "tm/z0tzQeGVw4FOGjKkRCxyKBbTOCGaxhZhmA2uZAZIUn4ZWGQRLicjPzHnzpuJ8fufoTsLM1JoL84GVhl798i71XguJOWSO4d1XK2yXbMswX0ebY8i8730sPb1LvshHM4Vt3R1wYNLMoYhqdjV4NCqOGxZZFFnc632+p7t5i6pmDNn0ojHTJgm7UHRbN4eKPlOtiJ6pdUGLx9S1P0niVYQQWzVwjc021keJ/+lY4zqmA57i5rXwkTgktmUodoxqNAUxpPRWCE7Ovlq0VuYmGj0oXVhRKJM9quD49zbgvyrD6MEe/aqlYwESRDxB4thwlZ29plZiSaZBgbNLR1ZCUlEQKkhG5q4R9rrr1Iw0kzyVPJMbt1ZWP8WbZbrDSUZyP5bgI4DOvq6xiN+i1LyvGWJEKdHIve7WJ/MmtuBxd7X5iMPqNFyLnNAo138WvYn5VXLoWlMP52fnexSxcH1RTZphVAGjM10auxssVAxi5OSasmD/glPvvWTn",
+    "header": "eyJ2ZXJzaW9uIjoxLCJzcGFjZUlkIjoiYjc3YWY0NzAtZTVhYS00NzA4LTliODktZGJlZDA1ODdiNGNmIiwiZGV2aWNlSWQiOiJlMTI4OGQ5Ni1mMDQxLTQ5NzctODcyNS03MmRhNjZjN2FhN2QiLCJtZW1iZXJJZCI6ImQxOGJiYzk2LTY1ZTUtNGMxYi1hYTc2LTZlODVjY2UxZDVjMSIsInNlcXVlbmNlIjoxLCJvcGVyYXRpb25JZCI6ImNiZWEwMGYyLWE3ZTctNDg4YS05ZmI4LTFmODE2ZDNkNDAzNCIsImVwb2NoIjoxfQ==",
+    "nonce": "LRJDo66gYlSSrfPy",
+    "signature": "cEz09jJIkN6ka8UAnFXmQu0a0AZe74JVKhtJHQilfcMx9qEYXP4+Qxl+Jcfbej2xldSMovrJCLGVJjpOqZCIQ7jSbEPbEjw1LcUFIa9WRssku/LA7gz8xSDEHO0FIVUv+9F1yq5EJxAzaCMM6Ov24R6Cd4nEKkhPlJesPD2G54Ek4/yB+Gby1+WZv/29gh8O3FDxF8NllDqHu0FrObjO+UaEl9JV61Y9oewMC33o/2dcm32CJfFSs3BVXdXGVTkomAS0IijhvgWd8tlS2NGeeGSlRzn6mPyrRG+TuwZtVODujv/GTmyrn4bXscRVyrd8slx8A/UXCIDrjGeNS5e3MSWiiY+dyyClkEl+EcwOG+ugqdm8fpvfoyWce9gnUoR046REmzceVZTdRRcQC0iKQK7mWVcp6OrULdTRLjV/F0V3lGXTk25Q2FJ1HDPmSmRgp3Ldm9NEdQ/Alzd7NDiB/uHgK7lnhEJkcsPBCbD+gjNC9xaFpJrxAnctz9kAymV2"
+  },
+  "plaintext": {
+    "baseVersions": {},
+    "deviceId": "e1288d96-f041-4977-8725-72da66c7aa7d",
+    "entityId": "3dddf8ae-00c2-4ad0-9155-2490b100e549",
+    "id": "cbea00f2-a7e7-488a-9fb8-1f816d3d4034",
+    "memberId": "d18bbc96-65e5-4c1b-aa76-6e85cce1d5c1",
+    "patch": {
+      "note": "秘密午饭"
+    },
+    "payload": {
+      "amountMinor": "2800",
+      "note": "秘密午饭"
+    },
+    "sequence": 1,
+    "spaceId": "b77af470-e5aa-4708-9b89-dbed0587b4cf"
+  },
+  "space": {
+    "adminDeviceId": "e1288d96-f041-4977-8725-72da66c7aa7d",
+    "devices": {
+      "cab7d293-d3c4-4f79-a680-f1e505120909": {
+        "memberId": "d18bbc96-65e5-4c1b-aa76-6e85cce1d5c1",
+        "publicKey": "MIIBojANBgkqhkiG9w0BAQEFAAOCAY8AMIIBigKCAYEAl6VKuam4I8SU7ChCCGd4vCBTZj76mluJKEnEQAZFdh7J0Y/McYaMat8jPVpz/TdqsnpuGbnVks42FjAKSEtQA0sF+kvebfd0He5opN2Yb1dSbaDDPnMfVQvCAku9HvGLGON5pubDY9CQOeoiC9SNP+RdnUYzp9aG/rG9jKekmZ1d0zp3wATV/vqDPgjcN2cD85A72SACN0PoT+AsRg7u339vBMa92hhDApYmhiJYY6g3njyfI7PCVvSTVvUJeGISddIPlg0GKqL4Aq8yuFjVSVkcgKLIybEAwPCZbh5uJtpbCXysqvhZvtvb+pkVLidH7f4qEPlhMm1FElD7QVNytJVknYS39xANgL2jXslzcXO8xkqNQoZLjq2xIHLt3Xsw6sIsz7ouS8U2NqQ2ySVgQ+psmbl/CcwEL51RuuiuMI7aV2difNuXTlo/ONBdHnPNjpeR9VbPj5efIvJCrCV2J8Mj3LtVZYji6juFM1oB1Q8TA3ow/CAcYnk2L7U81AlRAgMBAAE=",
+        "revoked": false
+      },
+      "e1288d96-f041-4977-8725-72da66c7aa7d": {
+        "memberId": "d18bbc96-65e5-4c1b-aa76-6e85cce1d5c1",
+        "publicKey": "MIIBojANBgkqhkiG9w0BAQEFAAOCAY8AMIIBigKCAYEApqpYL36JWg88ULIq6Z7hCjuVMHin0lPYsd4Mi4pe7lfYIbzoRRIsUOQ2fazwUaEYRhmojt1UBgGaRq8ixaxUI/0Xrn3iGOzW3dZGp7ztTQrsqcEzZsEWCqJtX5z1pql5looBOHBm6TS57ge1T5So/iTUDKCp78cIdb1jTdFcILYGpPiipiaRHPVQFXBEVDiTxxRWTitmN8I/AVkoABYvXzKMN0wj1rNhdZ+wh2pMjuC+uo0ubGGavr1d0i2DrDYcZ8MTaICrSshZG8JXAOjEbqi0jJlykndaRr9vJE+w9rFAE8uqzGnp//RBW0ZssQagQMh/7wjqzxIUIGveewSM/vOkJUm1NIDlgjr5ZPTYkpWcLjFCAFeMo5Q7NBGfKTgTfbKrqRzcWoU7MO0RhsY2rEmXW1ietpJfyLrogUnp0D58XSstaW5qLPIO6tZxTvrIpHUdlabyUnoSAijPCm83WkmUQ3qj2TflCEraePZQnbpoTCJDlo/tTucuniiW2CJdAgMBAAE=",
+        "revoked": false
+      }
+    },
+    "epoch": 1,
+    "id": "b77af470-e5aa-4708-9b89-dbed0587b4cf",
+    "keys": {
+      "1": "b02jwAJmMdUGB5V0DZBIRECsb8YjpaOoVCI8GLmP56E="
+    },
+    "kind": "personal",
+    "ownerMemberId": "d18bbc96-65e5-4c1b-aa76-6e85cce1d5c1",
+    "revision": 2
+  }
+}

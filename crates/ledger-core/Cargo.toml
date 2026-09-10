@@ -1,0 +1,15 @@
+[package]
+name = "lightledger-core"
+version = "0.1.0"
+edition = "2021"
+[dependencies]
+rusqlite = { version = "0.38", features = ["bundled-sqlcipher-vendored-openssl"] }
+serde_json = "1"
+uuid = { version = "1", features = ["v4"] }
+chrono = "0.4"
+csv = "1"
+aes-gcm = "0.10"
+pbkdf2 = { version = "0.12", features = ["simple"] }
+sha2 = "0.10"
+rand = "0.8"
+base64 = "0.22"

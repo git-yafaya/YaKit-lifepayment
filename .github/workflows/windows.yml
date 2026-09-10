@@ -1,0 +1,39 @@
+name: Windows build
+
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  windows:
+    runs-on: windows-2022
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: rustfmt
+      - name: Prepare native build tools
+        shell: pwsh
+        run: |
+          # SQLCipher 捆绑的 OpenSSL 需要 Perl，使用 Windows 原生版本。
+          if (!(Test-Path 'C:\Strawberry\perl\bin\perl.exe')) {
+            choco install strawberryperl --no-progress -y
+          }
+          'C:\Strawberry\perl\bin' | Out-File -FilePath $env:GITHUB_PATH -Append
+      - run: npm ci
+      - run: npm run build
+      - run: node --experimental-strip-types scripts/check-ui.mjs
+      - run: cargo fmt --all --check
+      - run: cargo test --locked -p lightledger-core -p lightledger-sync
+      - name: Build Windows installer
+        run: npm run tauri -- build --bundles nsis
+      - uses: actions/upload-artifact@v4
+        with:
+          name: LightLedger-Windows-x64
+          path: target/release/bundle/nsis/*.exe
+          if-no-files-found: error

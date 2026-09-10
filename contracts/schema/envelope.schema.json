@@ -1,0 +1,8 @@
+{
+ "$schema":"https://json-schema.org/draft/2020-12/schema",
+ "$id":"https://lightledger.local/contracts/v1/envelope",
+ "title":"LightLedger authenticated encrypted operation v1",
+ "type":"object","additionalProperties":false,
+ "required":["header","nonce","ciphertext","signature"],
+ "properties":{"header":{"type":"string","contentEncoding":"base64"},"nonce":{"type":"string","contentEncoding":"base64"},"ciphertext":{"type":"string","contentEncoding":"base64"},"signature":{"type":"string","contentEncoding":"base64"}}
+}
