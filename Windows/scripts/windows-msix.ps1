@@ -1,7 +1,7 @@
 # 先在证书存储中准备发布证书；脚本不会创建或信任任何证书。
 param(
     [Parameter(Mandatory = $true)][string]$CertificateThumbprint,
-    [string]$Version = '0.1.0.0',
+    [string]$Version = '0.1.1.0',
     [string]$OutputDirectory = 'artifacts',
     [switch]$SkipBuild
 )

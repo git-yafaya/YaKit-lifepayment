@@ -1,6 +1,8 @@
-# 轻账互通协议 v1
+# 轻账互通协议 v2
 
 Windows 与 Android 工程共用本目录协议及 `shared/crates/ledger-sync`；Android 跨端双向联调尚未完成。协议变更必须增加版本，不能按语言默认序列化猜测认证内容。
+
+应用 0.1.1 新发送的账务信封使用 v2，并继续接受 v1 历史信封。v2 增加个人转发的共同源字段版本及恢复设备重发相同操作的游标语义；旧客户端遇到 v2 返回 `unsupported-version`，需更新后继续同步。存储目录布局、配对与控制消息仍使用各自的 v1 格式。
 
 ## 数据及目录
 
@@ -16,7 +18,7 @@ UUID 使用小写带连字符字符串；金额使用非负十进制字符串；
 | 未知版本 | 返回 `unsupported-version`，停止本空间本轮；本地账务保留 |
 | 删除远端对象 | 不转换为删除本地账单；同步不清理历史操作 |
 
-远端文件名、设备公钥列表和文件长度不是秘密。账务载荷始终加密。个人空间与各共同空间使用独立的随机 32 字节密钥。个人邀请只允许同成员，新设备必须在空本上接受成员身份。共同邀请仅授予指定共同空间。
+远端文件名、设备公钥列表和文件长度不是秘密。账务载荷始终加密。个人空间与各共同空间使用独立的随机 32 字节密钥。个人邀请只允许同成员；非空账本仅可重新加入原成员、原个人空间，切换身份需要空账本。共同邀请仅授予指定共同空间。
 
 ## 密码套件与确切认证字节
 
@@ -25,7 +27,7 @@ UUID 使用小写带连字符字符串；金额使用非负十进制字符串；
 1. `header` 是 Header JSON 原始 UTF-8 字节的 Base64。字段依次是 `version, spaceId, deviceId, memberId, sequence, operationId, epoch`，但验证方直接使用传输字节，不反序列化再序列化。
 2. `nonce` 是 CSPRNG 生成的 12 字节，单次加密随机生成。每个待发操作信封首次生成后持久化，重试复用完整字节。
 3. 密码算法 AES-256-GCM；AAD 为 header 解码原始字节；`ciphertext` 是密文后接 16 字节认证标签。
-4. 签名字节是 UTF-8 `LightLedger/operation/v1`、一个 NUL 字节、header 字节长度的 4 字节无符号大端表示、header 原始字节、12 字节 nonce、ciphertext+tag，顺序拼接。
+4. 签名字节是 UTF-8 `LightLedger/operation/v2`（v1 历史信封使用 `LightLedger/operation/v1`）、一个 NUL 字节、header 字节长度的 4 字节无符号大端表示、header 原始字节、12 字节 nonce、ciphertext+tag，顺序拼接。前缀版本必须与 header.version 一致。
 5. `signature` 是 RSA-PSS SHA-256 签名，MGF1 SHA-256，盐长度 32 字节。先 SHA-256 上一步的字节串，再 PSS 签名摘要。验证签名、成员授权、版本、空间后解密；认证头必须与解密操作的 id/spaceId/deviceId/memberId/sequence 一致。
 6. 空间密钥封装使用 RSA-OAEP SHA-256，MGF1 SHA-256，空 label。解封对象是原始 32 字节空间密钥。
 7. 指纹是 SHA-256(SPKI DER) 的标准 Base64。批准和接受双方分别由用户核对指纹。
@@ -43,6 +45,15 @@ Grant: `{body,signature,signerPublicKey}`。body 是 GrantBody JSON 原始 UTF-8
 ## 账务应用
 
 操作完整 JSON 原样交给核心，包含 id/spaceId/entityId/deviceId/memberId/sequence/payload/patch/baseVersions。payload 为完整账单，patch 为本次修改的字段。baseVersions 是每字段的已知版本。不同字段合并；同字段基础版本不匹配保留冲突待办；解决冲突经核心再生成新操作。账务变更、已应用 ID、连续游标在同一事务中提交。收件箱不再送入 OCR。
+
+| 字段或状态 | v2 行为 |
+| --- | --- |
+| `sourceVersion` | 可选 UUID，仅用于共同变更转发到所有者个人空间；发送和接收均把它作为补丁涉及字段的版本，普通操作使用自身 id，共同入站不采纳该字段 |
+| 字段移除 | patch 显式发送 null，其他设备清除旧共享快照等字段 |
+| 解决冲突 | 只为本次生成的操作补充 resolves 和选择字段，旧待发操作保持不可变；共同投影中不存在的私有字段不进入解决操作 |
+| 共同回送个人 | 他人对本人记录的共同变更进入个人 outbox；所有者自己的操作已有个人副本，不重复回送；个人入站不再回送 |
+| 恢复后重发 | 保留原操作 id、payload、patch、baseVersions，使用恢复设备身份和该空间从 1 连续分配的序号发送未上传操作 |
+| 重复操作 | id 已在 applied 或本机 outbox 中时不重复合并；若来自另一设备的下一个连续序号，仍提交其游标，缺口不能跳过 |
 
 ## 验证与限制
 

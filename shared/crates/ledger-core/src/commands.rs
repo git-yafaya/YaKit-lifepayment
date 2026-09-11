@@ -43,7 +43,14 @@ impl LedgerService {
                     if old["shared"] != true || !self.trusted(s(&old, "ownerId"))? {
                         return Err("不能修改未获准的账单".into());
                     }
-                    let key = self.pending("coreModification", s(&old, "id"), p.clone(), actor)?;
+                    let mut patch = p.clone();
+                    // 共同投影不带私有字段，表单补出的空值不代表清空所有者数据。
+                    for field in ["note", "accountId"] {
+                        if old[field].is_null() && s(&patch, field).is_empty() {
+                            patch.as_object_mut().ok_or("字段格式错误")?.remove(field);
+                        }
+                    }
+                    let key = self.pending("coreModification", s(&old, "id"), patch, actor)?;
                     return Ok(json!({"pendingId":key}));
                 }
                 let mut locks = old["locks"].as_array().cloned().unwrap_or_default();
@@ -82,17 +89,36 @@ impl LedgerService {
             "summary" => self.summary(&p),
             "analysis" => self.analysis(&p),
             "adoptIdentity" => {
+                let mut identity = self.identity()?;
+                for field in ["memberId", "personalSpaceId"] {
+                    Uuid::parse_str(s(&p, field)).map_err(err)?;
+                }
+                // 恢复后的新设备重新加入原账本，无需切换成员或个人空间。
+                if identity["memberId"] == p["memberId"]
+                    && identity["personalSpaceId"] == p["personalSpaceId"]
+                {
+                    return Ok(identity);
+                }
                 if self
                     .db
                     .query_row("SELECT count(*) FROM records", [], |r| r.get::<_, i64>(0))
                     .map_err(err)?
                     > 0
                 {
-                    return Err("请先备份；已有账本不能自动切换成员".into());
+                    if self
+                        .db
+                        .query_row(
+                            "SELECT 1 FROM settings WHERE id='independentRecovery'",
+                            [],
+                            |r| r.get::<_, i32>(0),
+                        )
+                        .is_ok()
+                    {
+                        return Err("旧备份已恢复为独立账本，不能切换到原空间；请从本机导出账本信息，供空设备加入本账本".into());
+                    }
+                    return Err("请先备份；已有账本不能自动切换成员或个人空间".into());
                 }
-                let mut identity = self.identity()?;
                 for field in ["memberId", "personalSpaceId"] {
-                    Uuid::parse_str(s(&p, field)).map_err(err)?;
                     identity[field] = p[field].clone();
                 }
                 self.db
@@ -239,11 +265,28 @@ impl LedgerService {
                         v["shared"] = json!(false);
                     } else if kind == "coreModification" && approver == s(&old, "ownerId") {
                         let patch: Value = serde_json::from_str(&text).map_err(err)?;
-                        for key in ["amountMinor", "occurredAt", "payerId", "accountId"] {
+                        let mut locks = old["locks"].as_array().cloned().unwrap_or_default();
+                        // 审批覆盖编辑器账务字段，标识、所有权和共享状态仍由专用操作维护。
+                        for key in [
+                            "amountMinor",
+                            "currencyCode",
+                            "kind",
+                            "occurredAt",
+                            "merchant",
+                            "category",
+                            "payerId",
+                            "accountId",
+                            "note",
+                            "originalTransactionId",
+                        ] {
                             if !patch[key].is_null() {
                                 v[key] = patch[key].clone();
+                                if !locks.contains(&json!(key)) {
+                                    locks.push(json!(key));
+                                }
                             }
                         }
+                        v["locks"] = json!(locks);
                         self.validate(&v)?;
                     } else {
                         return Err("修改申请必须由所有者批准".into());
@@ -369,5 +412,213 @@ impl LedgerService {
             ),
             _ => Err(format!("未知操作: {action}")),
         }
+    }
+}
+
+#[cfg(test)]
+mod checks {
+    use super::*;
+
+    fn draft() -> Value {
+        json!({"amountMinor":"2800","currencyCode":"CNY","kind":"expense","occurredAt":"2026-09-10T12:00:00Z","merchant":"午饭","payerId":"local","note":"个人备注","accountId":"个人账户"})
+    }
+
+    fn deliver(from: &mut LedgerService, to: &mut LedgerService, space: &str) {
+        let operations = from.dispatch("pendingUploads", json!({})).unwrap();
+        for operation in operations.as_array().unwrap() {
+            if operation["spaceId"] == space {
+                to.dispatch("applyOperation", operation.clone()).unwrap();
+                from.dispatch("markUploaded", json!({"id":operation["id"]}))
+                    .unwrap();
+            }
+        }
+    }
+
+    #[test]
+    fn restored_ledger_rejoins_and_continues_history_without_losing_pending_edits() {
+        let mut original_ledger = LedgerService::open(Path::new(":memory:"), &[1; 32]).unwrap();
+        let mut peer = LedgerService::open(Path::new(":memory:"), &[2; 32]).unwrap();
+        let original = original_ledger.identity().unwrap();
+        let space = s(&original, "personalSpaceId");
+        peer.dispatch("adoptIdentity", original.clone()).unwrap();
+        let record = original_ledger.dispatch("create", draft()).unwrap();
+        let key = s(&record, "id");
+        original_ledger
+            .dispatch("update", json!({"id":key,"note":"已同步备注"}))
+            .unwrap();
+        deliver(&mut original_ledger, &mut peer, space);
+        peer.dispatch("update", json!({"id":key,"merchant":"已同步商户"}))
+            .unwrap();
+        deliver(&mut peer, &mut original_ledger, space);
+        original_ledger
+            .dispatch("update", json!({"id":key,"note":"待同步备注"}))
+            .unwrap();
+        let pending = original_ledger
+            .dispatch("pendingUploads", json!({}))
+            .unwrap();
+        let path = std::env::temp_dir().join(format!("lightledger-pairing-{}.backup", id()));
+        let backup = json!({"path":path,"password":"backup-password"});
+        original_ledger
+            .dispatch("exportBackup", backup.clone())
+            .unwrap();
+        let mut ledger = LedgerService::open(Path::new(":memory:"), &[3; 32]).unwrap();
+        ledger.dispatch("restoreBackup", backup).unwrap();
+        std::fs::remove_file(path).unwrap();
+        let restored = ledger.identity().unwrap();
+        assert_ne!(restored["deviceId"], original["deviceId"]);
+        assert_eq!(
+            ledger.dispatch("adoptIdentity", original.clone()).unwrap(),
+            restored
+        );
+        for field in ["memberId", "personalSpaceId"] {
+            let mut other = original.clone();
+            other[field] = json!(id());
+            assert!(ledger.dispatch("adoptIdentity", other).is_err());
+        }
+        assert_eq!(ledger.identity().unwrap(), restored);
+        let requeued = ledger.dispatch("pendingUploads", json!({})).unwrap();
+        assert_eq!(requeued.as_array().unwrap().len(), 1);
+        for field in ["id", "baseVersions", "payload", "patch"] {
+            assert_eq!(requeued[0][field], pending[0][field], "{field}");
+        }
+        assert_eq!(requeued[0]["deviceId"], restored["deviceId"]);
+        assert_eq!(requeued[0]["sequence"], 1);
+        assert_eq!(
+            ledger
+                .dispatch(
+                    "syncCursor",
+                    json!({"spaceId":space,"deviceId":original["deviceId"]})
+                )
+                .unwrap()["sequence"],
+            3
+        );
+
+        // 原设备和恢复设备都可能上传同一待办；操作只生效一次，游标仍分别推进。
+        deliver(&mut original_ledger, &mut peer, space);
+        deliver(&mut ledger, &mut peer, space);
+        original_ledger
+            .dispatch("update", json!({"id":key,"note":"备份后的备注"}))
+            .unwrap();
+        deliver(&mut original_ledger, &mut ledger, space);
+        peer.dispatch("update", json!({"id":key,"category":"备份后的分类"}))
+            .unwrap();
+        deliver(&mut peer, &mut ledger, space);
+        assert_eq!(ledger.record(key).unwrap()["note"], "备份后的备注");
+        assert_eq!(ledger.record(key).unwrap()["category"], "备份后的分类");
+        assert_eq!(peer.record(key).unwrap()["note"], "待同步备注");
+        for service in [&mut ledger, &mut peer] {
+            assert!(service
+                .dispatch("pending", json!({}))
+                .unwrap()
+                .as_array()
+                .unwrap()
+                .is_empty());
+        }
+        ledger
+            .dispatch("update", json!({"id":key,"merchant":"新设备后续修改"}))
+            .unwrap();
+        assert_eq!(
+            ledger.dispatch("pendingUploads", json!({})).unwrap()[0]["sequence"],
+            2
+        );
+    }
+
+    #[test]
+    fn approved_editor_fields_apply_without_replacing_record_identity() {
+        let mut owner = LedgerService::open(Path::new(":memory:"), &[1; 32]).unwrap();
+        let mut member = LedgerService::open(Path::new(":memory:"), &[2; 32]).unwrap();
+        let oi = owner.identity().unwrap();
+        let mi = member.identity().unwrap();
+        let space = s(&oi, "sharedSpaceId");
+        member
+            .dispatch("adoptSharedSpace", json!({"sharedSpaceId":space}))
+            .unwrap();
+        owner
+            .dispatch(
+                "registerTrustedMember",
+                json!({"memberId":mi["memberId"],"sharedSpaceId":space}),
+            )
+            .unwrap();
+        member
+            .dispatch(
+                "registerTrustedMember",
+                json!({"memberId":oi["memberId"],"sharedSpaceId":space}),
+            )
+            .unwrap();
+        let created = owner.dispatch("create", draft()).unwrap();
+        let record = owner.record(s(&created, "id")).unwrap();
+        let key = s(&record, "id");
+        owner.dispatch("share", json!({"id":key})).unwrap();
+        deliver(&mut owner, &mut member, space);
+
+        // 未展示的私有字段由编辑器补空，批准后必须保留所有者原值。
+        let request = member
+            .dispatch(
+                "update",
+                json!({"id":key,"merchant":"晚饭","note":"","accountId":""}),
+            )
+            .unwrap();
+        deliver(&mut member, &mut owner, space);
+        owner
+            .dispatch(
+                "approveModification",
+                json!({"id":request["pendingId"],"approve":true}),
+            )
+            .unwrap();
+        assert_eq!(owner.record(key).unwrap()["note"], "个人备注");
+        assert_eq!(owner.record(key).unwrap()["accountId"], "个人账户");
+        deliver(&mut owner, &mut member, space);
+
+        let patch = json!({"id":key,"amountMinor":"3500","currencyCode":"USD","kind":"income","occurredAt":"2026-09-11T13:00:00Z","merchant":"新商户","category":"新分类","payerId":mi["memberId"],"accountId":"新账户","note":"申请备注","originalTransactionId":"","ownerId":mi["memberId"],"deleted":true,"shared":false,"captureId":"替换来源","transactionKey":"替换交易","locks":[]});
+        let request = member.dispatch("update", patch.clone()).unwrap();
+        deliver(&mut member, &mut owner, space);
+        owner
+            .dispatch(
+                "approveModification",
+                json!({"id":request["pendingId"],"approve":true}),
+            )
+            .unwrap();
+        let approved = owner.record(key).unwrap();
+        for field in [
+            "amountMinor",
+            "currencyCode",
+            "kind",
+            "occurredAt",
+            "merchant",
+            "category",
+            "payerId",
+            "accountId",
+            "note",
+            "originalTransactionId",
+        ] {
+            assert_eq!(approved[field], patch[field], "{field}");
+            assert!(approved["locks"]
+                .as_array()
+                .unwrap()
+                .contains(&json!(field)));
+        }
+        for field in ["id", "ownerId", "deleted", "captureId", "transactionKey"] {
+            assert_eq!(approved[field], record[field], "{field}");
+        }
+        assert_eq!(approved["shared"], true);
+        assert!(owner
+            .dispatch("pending", json!({}))
+            .unwrap()
+            .as_array()
+            .unwrap()
+            .is_empty());
+        deliver(&mut owner, &mut member, space);
+        let shared = member.record(key).unwrap();
+        for field in [
+            "amountMinor",
+            "currencyCode",
+            "kind",
+            "merchant",
+            "category",
+        ] {
+            assert_eq!(shared[field], patch[field], "{field}");
+        }
+        assert!(shared["note"].is_null());
+        assert!(shared["accountId"].is_null());
     }
 }

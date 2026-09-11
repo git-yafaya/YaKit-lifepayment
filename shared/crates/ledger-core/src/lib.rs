@@ -1,3 +1,4 @@
+mod backup;
 mod capture;
 mod commands;
 mod queries;
@@ -111,29 +112,45 @@ impl LedgerService {
             {
                 return Err("退款必须关联同币种支出".into());
             }
-            let refunded = self
-                .rows()?
-                .iter()
-                .filter(|r| {
-                    s(r, "originalTransactionId") == s(v, "originalTransactionId")
-                        && s(r, "id") != s(v, "id")
-                        && r["deleted"] != true
-                })
-                .try_fold(0i64, |a, r| {
-                    a.checked_add(s(r, "amountMinor").parse::<i64>().unwrap_or(0))
-                })
-                .ok_or("退款金额溢出")?;
+            let (refunded, _) =
+                self.refund_totals(s(&original, "id"), s(v, "id"), s(v, "currencyCode"))?;
             if refunded.checked_add(amount).ok_or("退款金额溢出")?
                 > s(&original, "amountMinor").parse::<i64>().unwrap_or(0)
             {
                 return Err("累计退款超过原始支出".into());
             }
         }
-        let refunds:i64=self.db.query_row("SELECT COALESCE(SUM(CAST(json_extract(data,'$.amountMinor') AS INTEGER)),0) FROM records WHERE json_extract(data,'$.originalTransactionId')=? AND COALESCE(json_extract(data,'$.deleted'),0)=0 AND id!=?",params![s(v,"id"),s(v,"id")],|r|r.get(0)).map_err(err)?;
+        let (refunds, currency_mismatch) =
+            self.refund_totals(s(v, "id"), s(v, "id"), s(v, "currencyCode"))?;
+        // 修改原支出时也核对退款币种，不能让已入账的退款失去关联。
+        if currency_mismatch {
+            return Err("请先处理关联退款，原账单币种必须与退款一致".into());
+        }
         if refunds > 0 && (v["deleted"] == true || s(v, "kind") != "expense" || amount < refunds) {
             return Err("请先处理关联退款，原账单不能删除、改类型或小于已退款金额".into());
         }
         Ok(())
+    }
+    fn refund_totals(
+        &self,
+        original: &str,
+        excluded: &str,
+        currency: &str,
+    ) -> Result<(i64, bool), String> {
+        // 旧编号关联的退款计入合并后的账单，已合并的回收站记录不再重复承担退款。
+        // +id 去掉列的类型偏好，让 JSON 退款索引继续生效，避免扫描所有账单。
+        self.db
+            .query_row(
+                "SELECT COALESCE(SUM(CAST(json_extract(data,'$.amountMinor') AS INTEGER)),0),
+             COALESCE(MAX(json_extract(data,'$.currencyCode')!=?3),0)
+             FROM records WHERE json_extract(data,'$.originalTransactionId') IN (
+                 SELECT ?1 WHERE NOT EXISTS(SELECT 1 FROM aliases WHERE id=?1)
+                 UNION ALL SELECT +id FROM aliases WHERE target=?1
+             ) AND COALESCE(json_extract(data,'$.deleted'),0)=0 AND id!=?2",
+                params![original, excluded, currency],
+                |r| Ok((r.get(0)?, r.get(1)?)),
+            )
+            .map_err(err)
     }
     fn save(&self, v: &Value, action: &str, actor: &str, old: Value) -> Result<(), String> {
         let mut normalized = v.clone();
@@ -521,6 +538,12 @@ mod checks {
         refund["originalTransactionId"] = first["id"].clone();
         refund["merchant"] = json!("退款");
         let returned = a.dispatch("create", refund).unwrap();
+        let before = a.dispatch("pendingUploads", json!({})).unwrap();
+        assert!(a
+            .dispatch("update", json!({"id":first["id"],"currencyCode":"USD"}))
+            .is_err());
+        assert_eq!(a.record(s(&first, "id")).unwrap()["currencyCode"], "CNY");
+        assert_eq!(a.dispatch("pendingUploads", json!({})).unwrap(), before);
         assert!(a
             .dispatch("update", json!({"id":first["id"],"amountMinor":"3000"}))
             .is_err());
@@ -529,6 +552,8 @@ mod checks {
         a.dispatch("update", json!({"id":first["id"],"amountMinor":"3000"}))
             .unwrap();
         assert!(a.dispatch("restore", json!({"id":returned["id"]})).is_err());
+        a.dispatch("update", json!({"id":first["id"],"currencyCode":"USD"}))
+            .unwrap();
         let text = serde_json::to_string(&vec![draft("15"), draft("-1")]).unwrap();
         let imported = a.dispatch("importJson", json!({"text":text})).unwrap();
         assert_eq!(imported[0]["status"], "created");
@@ -563,6 +588,39 @@ mod checks {
         )
         .unwrap();
         assert_eq!(a.record(s(&original, "id")).unwrap()["note"], "来源文本");
+    }
+    #[test]
+    fn refund_aliases_share_amount_and_currency_checks() {
+        let mut app = LedgerService::open(Path::new(":memory:"), &[1; 32]).unwrap();
+        let original = app
+            .dispatch("create", json!({"amountMinor":"10000"}))
+            .unwrap();
+        let source = app
+            .dispatch("create", json!({"amountMinor":"10000"}))
+            .unwrap();
+        app.dispatch(
+            "mergeTransactions",
+            json!({"sourceId":source["id"],"targetId":original["id"]}),
+        )
+        .unwrap();
+        app.dispatch(
+            "create",
+            json!({"amountMinor":"4000","kind":"refund","originalTransactionId":source["id"]}),
+        )
+        .unwrap();
+        assert!(app
+            .dispatch("update", json!({"id":original["id"],"currencyCode":"USD"}))
+            .is_err());
+        assert!(app
+            .dispatch(
+                "create",
+                json!({"amountMinor":"7000","kind":"refund","originalTransactionId":original["id"]})
+            )
+            .is_err());
+        assert_eq!(
+            app.dispatch("summary", json!({})).unwrap()[0]["refundMinor"],
+            "4000"
+        );
     }
     #[test]
     fn fifty_thousand_query_baseline() {

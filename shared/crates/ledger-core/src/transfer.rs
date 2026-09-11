@@ -1,6 +1,4 @@
 use super::*;
-use aes_gcm::{aead::Aead, Aes256Gcm, KeyInit, Nonce};
-use rand::RngCore;
 impl LedgerService {
     pub(crate) fn transfer(&mut self, action: &str, p: Value) -> Result<Value, String> {
         match action {
@@ -9,16 +7,7 @@ impl LedgerService {
             }
             "importJson" => {
                 let rows: Vec<Value> = serde_json::from_str(s(&p, "text")).map_err(err)?;
-                let mut results = vec![];
-                for (index, mut row) in rows.into_iter().enumerate() {
-                    use sha2::Digest;
-                    row["captureId"] = json!(format!(
-                        "json:{:x}:{index}",
-                        sha2::Sha256::digest(s(&p, "text").as_bytes())
-                    ));
-                    results.push(self.import_row(row, index + 1));
-                }
-                Ok(json!(results))
+                Ok(self.import_rows(rows.into_iter().map(Ok).collect(), s(&p, "text"), "json"))
             }
             "exportCsv" => {
                 let mut w = csv::Writer::from_writer(vec![]);
@@ -55,171 +44,44 @@ impl LedgerService {
                         return Err(format!("缺少列: {required}"));
                     }
                 }
-                let mut results = vec![];
-                for (index, row) in reader.records().enumerate() {
-                    let row = match row {
-                        Ok(row) => row,
-                        Err(e) => {
-                            results.push(
-                                json!({"status":"failed","row":index+1,"message":e.to_string()}),
-                            );
-                            continue;
-                        }
-                    };
-                    let mut value = json!({});
-                    for (h, v) in headers.iter().zip(row.iter()) {
-                        if !v.is_empty() {
-                            value[h] = json!(v);
-                        }
-                    } // 文件内容和行号共同标记，重试不会重复入账。
-                    use sha2::Digest;
-                    value["captureId"] = json!(format!(
-                        "csv:{:x}:{index}",
-                        sha2::Sha256::digest(s(&p, "text").as_bytes())
-                    ));
-                    results.push(self.import_row(value, index + 1));
-                }
-                Ok(json!(results))
-            }
-            "exportBackup" => {
-                if s(&p, "password").len() < 8 {
-                    return Err("备份密码至少8个字符".into());
-                }
-                let mut salt = [0u8; 16];
-                let mut nonce = [0u8; 12];
-                rand::thread_rng().fill_bytes(&mut salt);
-                rand::thread_rng().fill_bytes(&mut nonce);
-                let mut key = [0u8; 32];
-                pbkdf2::pbkdf2_hmac::<sha2::Sha256>(
-                    s(&p, "password").as_bytes(),
-                    &salt,
-                    600_000,
-                    &mut key,
-                );
-                let mut tables = serde_json::Map::new();
-                for table in [
-                    "records",
-                    "captures",
-                    "pending",
-                    "history",
-                    "settings",
-                    "aliases",
-                    "field_versions",
-                    "sources",
-                ] {
-                    let mut st = self
-                        .db
-                        .prepare(&format!("SELECT * FROM {table}"))
-                        .map_err(err)?;
-                    let cols = st.column_count();
-                    let rows = st
-                        .query_map([], |r| {
-                            let mut cells = vec![];
-                            for i in 0..cols {
-                                cells.push(match r.get_ref(i)? {
-                                    rusqlite::types::ValueRef::Integer(n) => json!(n),
-                                    rusqlite::types::ValueRef::Text(t) => {
-                                        json!(String::from_utf8_lossy(t))
-                                    }
-                                    _ => Value::Null,
-                                });
+                let rows = reader
+                    .records()
+                    .map(|row| {
+                        let row = row.map_err(err)?;
+                        let mut value = json!({});
+                        for (h, v) in headers.iter().zip(row.iter()) {
+                            if !v.is_empty() {
+                                value[h] = json!(v);
                             }
-                            Ok(cells)
-                        })
-                        .map_err(err)?
-                        .collect::<Result<Vec<_>, _>>()
-                        .map_err(err)?;
-                    tables.insert(table.into(), json!(rows));
-                }
-                let clear = serde_json::to_vec(&tables).map_err(err)?;
-                let encrypted = Aes256Gcm::new_from_slice(&key)
-                    .map_err(err)?
-                    .encrypt(Nonce::from_slice(&nonce), clear.as_ref())
-                    .map_err(|_| "备份加密失败")?;
-                let mut output = b"QACCOUNT1".to_vec();
-                output.extend(salt);
-                output.extend(nonce);
-                output.extend(encrypted);
-                let path = Path::new(s(&p, "path"));
-                let mut file = std::fs::OpenOptions::new()
-                    .write(true)
-                    .create_new(true)
-                    .open(path)
-                    .map_err(err)?;
-                use std::io::Write;
-                file.write_all(&output).map_err(err)?;
-                file.sync_all().map_err(err)?;
-                Ok(json!({"saved":true}))
+                        }
+                        Ok(value)
+                    })
+                    .collect();
+                Ok(self.import_rows(rows, s(&p, "text"), "csv"))
             }
-            "restoreBackup" => {
-                let bytes = std::fs::read(s(&p, "path")).map_err(err)?;
-                if bytes.len() < 53 || &bytes[..9] != b"QACCOUNT1" {
-                    return Err("备份格式无效".into());
-                }
-                let mut key = [0u8; 32];
-                pbkdf2::pbkdf2_hmac::<sha2::Sha256>(
-                    s(&p, "password").as_bytes(),
-                    &bytes[9..25],
-                    600_000,
-                    &mut key,
-                );
-                let clear = Aes256Gcm::new_from_slice(&key)
-                    .map_err(err)?
-                    .decrypt(Nonce::from_slice(&bytes[25..37]), &bytes[37..])
-                    .map_err(|_| "密码错误或备份损坏")?;
-                let tables: Value = serde_json::from_slice(&clear).map_err(err)?;
-                for table in [
-                    "records",
-                    "captures",
-                    "pending",
-                    "history",
-                    "settings",
-                    "aliases",
-                    "field_versions",
-                    "sources",
-                ] {
-                    let rows = tables[table].as_array().ok_or("备份表缺失")?;
-                    self.db
-                        .execute(&format!("DELETE FROM {table}"), [])
-                        .map_err(err)?;
-                    for row in rows {
-                        let cells = row.as_array().ok_or("备份行无效")?;
-                        let sql = format!(
-                            "INSERT INTO {table} VALUES({})",
-                            vec!["?"; cells.len()].join(",")
-                        );
-                        let values = cells.iter().map(|v| {
-                            if let Some(n) = v.as_i64() {
-                                rusqlite::types::Value::Integer(n)
-                            } else if let Some(t) = v.as_str() {
-                                rusqlite::types::Value::Text(t.into())
-                            } else {
-                                rusqlite::types::Value::Null
-                            }
-                        });
-                        self.db
-                            .execute(&sql, rusqlite::params_from_iter(values))
-                            .map_err(err)?;
-                    }
-                }
-                self.db
-                    .execute_batch("DELETE FROM outbox; DELETE FROM applied; DELETE FROM cursors; DELETE FROM sequences;")
-                    .map_err(err)?;
-                for r in self.rows()? {
-                    self.validate(&r)?;
-                }
-                let mut identity = self.identity()?;
-                identity["deviceId"] = json!(id());
-                self.db
-                    .execute(
-                        "UPDATE settings SET data=? WHERE id='identity'",
-                        [identity.to_string()],
-                    )
-                    .map_err(err)?;
-                Ok(json!({"restored":true,"requiresPairing":true}))
-            }
+            "exportBackup" | "restoreBackup" => self.backup(action, p),
             _ => Err("不支持的数据操作".into()),
         }
+    }
+    fn import_rows(&self, rows: Vec<Result<Value, String>>, text: &str, format: &str) -> Value {
+        use sha2::Digest;
+        let digest = sha2::Sha256::digest(text.as_bytes());
+        let mut results = vec![Value::Null; rows.len()];
+        let mut rows: Vec<_> = rows.into_iter().enumerate().collect();
+        // 先导入原交易，再按原顺序处理退款；结果和来源标记仍使用文件行号。
+        rows.sort_by_key(|(_, row)| row.as_ref().is_ok_and(|row| s(row, "kind") == "refund"));
+        for (index, row) in rows {
+            results[index] = match row {
+                Ok(mut row) if row.is_object() => {
+                    row["captureId"] = json!(format!("{format}:{digest:x}:{index}"));
+                    self.import_row(row, index + 1)
+                }
+                row => {
+                    json!({"status":"failed","row":index+1,"message":row.err().unwrap_or_else(|| "账单必须为对象".into())})
+                }
+            };
+        }
+        json!(results)
     }
     fn import_row(&self, mut row: Value, index: usize) -> Value {
         if let Ok(existing) = self.record(s(&row, "id")) {
@@ -266,5 +128,83 @@ impl LedgerService {
             .into_iter()
             .filter(|r| r["ownerId"] == member["memberId"])
             .collect())
+    }
+}
+
+#[cfg(test)]
+mod checks {
+    use super::*;
+
+    fn expense() -> Value {
+        json!({"id":"expense","amountMinor":"1000","currencyCode":"CNY","kind":"expense","occurredAt":"2026-09-10T12:00:00Z","payerId":"local"})
+    }
+
+    #[test]
+    fn json_non_objects_fail_without_poisoning_ledger() {
+        let ledger =
+            std::sync::Mutex::new(LedgerService::open(Path::new(":memory:"), &[1; 32]).unwrap());
+        let text = json!([123, null, [], "text", false, expense()]).to_string();
+        let result = ledger
+            .lock()
+            .unwrap()
+            .dispatch("importJson", json!({"text":text}))
+            .unwrap();
+        for index in 0..5 {
+            assert_eq!(result[index]["status"], "failed");
+            assert_eq!(result[index]["row"], index + 1);
+        }
+        assert_eq!(result[5]["status"], "created");
+        assert_eq!(result[5]["row"], 6);
+        let mut ledger = ledger.lock().unwrap();
+        assert_eq!(ledger.rows().unwrap().len(), 1);
+        assert_eq!(
+            ledger.dispatch("importJson", json!({"text":text})).unwrap()[5]["status"],
+            "existing"
+        );
+    }
+
+    #[test]
+    fn exported_refunds_import_before_their_original_row() {
+        let mut source = LedgerService::open(Path::new(":memory:"), &[1; 32]).unwrap();
+        source.dispatch("create", expense()).unwrap();
+        let mut refund = expense();
+        refund["id"] = json!("refund");
+        refund["kind"] = json!("refund");
+        refund["amountMinor"] = json!("400");
+        refund["originalTransactionId"] = json!("expense");
+        refund["occurredAt"] = json!("2026-09-11T12:00:00Z");
+        source.dispatch("create", refund).unwrap();
+        for (export, import) in [("exportJson", "importJson"), ("exportCsv", "importCsv")] {
+            let text = source.dispatch(export, json!({})).unwrap();
+            let mut target = LedgerService::open(Path::new(":memory:"), &[2; 32]).unwrap();
+            for status in ["created", "existing"] {
+                let result = target.dispatch(import, text.clone()).unwrap();
+                assert_eq!(result.as_array().unwrap().len(), 2);
+                for (index, id) in ["refund", "expense"].into_iter().enumerate() {
+                    assert_eq!(result[index]["status"], status);
+                    assert_eq!(result[index]["id"], id);
+                    assert_eq!(result[index]["row"], index + 1);
+                }
+            }
+            assert_eq!(target.rows().unwrap().len(), 2);
+        }
+    }
+
+    #[test]
+    fn csv_refunds_preserve_row_order_and_partial_failures() {
+        let mut ledger = LedgerService::open(Path::new(":memory:"), &[1; 32]).unwrap();
+        let text = "id,amountMinor,currencyCode,kind,occurredAt,payerId,originalTransactionId\nrefund-a,600,CNY,refund,2026-09-11T12:00:00Z,local,expense\ninvalid\nrefund-b,500,CNY,refund,2026-09-11T13:00:00Z,local,expense\nexpense,1000,CNY,expense,2026-09-10T12:00:00Z,local,\n";
+        for success in ["created", "existing"] {
+            let result = ledger.dispatch("importCsv", json!({"text":text})).unwrap();
+            for (index, status) in [success, "failed", "failed", success]
+                .into_iter()
+                .enumerate()
+            {
+                assert_eq!(result[index]["status"], status);
+                assert_eq!(result[index]["row"], index + 1);
+            }
+            assert_eq!(result[2]["message"], "累计退款超过原始支出");
+        }
+        assert_eq!(ledger.rows().unwrap().len(), 2);
     }
 }

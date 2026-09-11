@@ -1,6 +1,6 @@
 {
  "$schema":"https://json-schema.org/draft/2020-12/schema",
- "$id":"https://lightledger.local/contracts/v1/operation",
+ "$id":"https://lightledger.local/contracts/v2/operation",
  "type":"object", "required":["id","spaceId","entityId","deviceId","memberId","sequence","payload","patch","baseVersions"],
- "properties":{"id":{"type":"string","format":"uuid"},"spaceId":{"type":"string","format":"uuid"},"entityId":{"type":"string","minLength":1},"deviceId":{"type":"string","format":"uuid"},"memberId":{"type":"string","format":"uuid"},"sequence":{"type":"integer","minimum":1},"payload":{"type":"object"},"patch":{"type":"object"},"baseVersions":{"type":"object"},"baseVersion":{"type":"integer"}}
+ "properties":{"id":{"type":"string","format":"uuid"},"spaceId":{"type":"string","format":"uuid"},"entityId":{"type":"string","minLength":1},"deviceId":{"type":"string","format":"uuid"},"memberId":{"type":"string","format":"uuid"},"sequence":{"type":"integer","minimum":1},"payload":{"type":"object"},"patch":{"type":"object"},"baseVersions":{"type":"object"},"baseVersion":{"type":"integer"},"sourceVersion":{"type":"string","format":"uuid"}}
 }

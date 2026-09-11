@@ -148,8 +148,8 @@ pub struct Envelope {
     pub signature: String,
 }
 // 签名直接覆盖二进制头、随机数和密文；头的原始字节同时作为 GCM 附加认证数据。
-fn signed(header: &[u8], nonce: &[u8], cipher: &[u8]) -> Vec<u8> {
-    let mut out = b"LightLedger/operation/v1\0".to_vec();
+fn signed(version: u32, header: &[u8], nonce: &[u8], cipher: &[u8]) -> Vec<u8> {
+    let mut out = format!("LightLedger/operation/v{version}\0").into_bytes();
     out.extend((header.len() as u32).to_be_bytes());
     out.extend(header);
     out.extend(nonce);
@@ -168,7 +168,8 @@ pub fn seal(
         return Err("设备已撤销".into());
     }
     let h = Header {
-        version: 1,
+        // 新操作要求接收端理解共同来源版本和恢复后的重复操作游标。
+        version: 2,
         space_id: space.id.clone(),
         device_id: identity.device_id.clone(),
         member_id: identity.member_id.clone(),
@@ -193,14 +194,14 @@ pub fn seal(
     Ok(Envelope {
         header: b64(&header),
         nonce: b64(&nonce),
-        signature: identity.sign(&signed(&header, &nonce, &cipher))?,
+        signature: identity.sign(&signed(h.version, &header, &nonce, &cipher))?,
         ciphertext: b64(&cipher),
     })
 }
 pub fn open(space: &Space, e: &Envelope) -> Result<(Header, serde_json::Value)> {
     let header = unb64(&e.header)?;
     let h: Header = serde_json::from_slice(&header).map_err(|_| "无效操作头")?;
-    if h.version != 1 {
+    if ![1, 2].contains(&h.version) {
         return Err("unsupported-version".into());
     }
     if h.space_id != space.id || h.sequence == 0 {
@@ -217,7 +218,7 @@ pub fn open(space: &Space, e: &Envelope) -> Result<(Header, serde_json::Value)> 
     let cipher = unb64(&e.ciphertext)?;
     verify(
         &d.public_key,
-        &signed(&header, &nonce, &cipher),
+        &signed(h.version, &header, &nonce, &cipher),
         &e.signature,
     )?;
     let key = unb64(space.keys.get(&h.epoch).ok_or("缺少密钥版本")?)?;

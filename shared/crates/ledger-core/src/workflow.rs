@@ -157,11 +157,22 @@ impl LedgerService {
                     }
                     value["locks"] = json!(locks);
                 }
+                let previous_row: i64 = self
+                    .db
+                    .query_row("SELECT COALESCE(MAX(rowid),0) FROM outbox", [], |r| {
+                        r.get(0)
+                    })
+                    .map_err(err)?;
                 self.save(&value, "resolveConflict", s(&me, "memberId"), old)?;
-                // 解决操作带双方版本，新设备重放时可以明确取代冲突版本。
-                let mut st=self.db.prepare("SELECT id,payload FROM outbox WHERE entity=? AND uploaded=0 ORDER BY rowid DESC LIMIT 2").map_err(err)?;
+                // 只补充本次解决操作，旧待发操作可能已缓存密文，不能再修改。
+                let mut st = self
+                    .db
+                    .prepare(
+                        "SELECT id,payload FROM outbox WHERE entity=? AND rowid>? ORDER BY rowid",
+                    )
+                    .map_err(err)?;
                 let ops = st
-                    .query_map([&key], |r| {
+                    .query_map(params![key, previous_row], |r| {
                         Ok((r.get::<_, String>(0)?, r.get::<_, String>(1)?))
                     })
                     .map_err(err)?
@@ -169,16 +180,17 @@ impl LedgerService {
                     .map_err(err)?;
                 for (op, text) in ops {
                     let mut op_value: Value = serde_json::from_str(&text).map_err(err)?;
-                    op_value["resolves"] = json!(fields
+                    // 使用该空间已经裁剪过的内容，私有字段不进入共同操作。
+                    let resolves = fields
                         .iter()
+                        .filter(|(field, _)| op_value["payload"].get(*field).is_some())
                         .map(|(f, v)| (f.clone(), json!([v["localVersion"], v["remoteVersion"]])))
-                        .collect::<serde_json::Map<String, Value>>());
-                    for field in fields.keys() {
-                        op_value["patch"][field] = value[field].clone();
-                    }
-                    for field in fields.keys() {
+                        .collect::<serde_json::Map<String, Value>>();
+                    for field in resolves.keys() {
+                        op_value["patch"][field] = op_value["payload"][field].clone();
                         self.db.execute("INSERT INTO field_versions VALUES(?,?,?) ON CONFLICT(entity,field) DO UPDATE SET version=excluded.version",params![format!("{}:{key}",s(&op_value,"spaceId")),field,op]).map_err(err)?;
                     }
+                    op_value["resolves"] = json!(resolves);
                     self.db
                         .execute(
                             "UPDATE outbox SET payload=? WHERE id=?",
@@ -275,6 +287,108 @@ impl LedgerService {
                 Ok(json!({"purged":n}))
             }
             _ => Err("未知流程".into()),
+        }
+    }
+}
+
+#[cfg(test)]
+mod checks {
+    use super::*;
+
+    #[test]
+    fn resolution_preserves_queued_operations_and_shared_projection() {
+        for shared in [false, true] {
+            let mut a = LedgerService::open(Path::new(":memory:"), &[1; 32]).unwrap();
+            let mut b = LedgerService::open(Path::new(":memory:"), &[2; 32]).unwrap();
+            let identity = a.identity().unwrap();
+            b.dispatch("adoptIdentity", json!({"memberId":identity["memberId"],"personalSpaceId":identity["personalSpaceId"]})).unwrap();
+            let created = a
+                .dispatch("create", json!({"amountMinor":"100","note":"初始"}))
+                .unwrap();
+            let key = s(&created, "id");
+            if shared {
+                a.dispatch("share", json!({"id":key})).unwrap();
+            }
+            let personal = s(&identity, "personalSpaceId");
+            let initial = a.dispatch("pendingUploads", json!({})).unwrap();
+            for op in initial.as_array().unwrap() {
+                if op["spaceId"] == personal {
+                    b.dispatch("applyOperation", op.clone()).unwrap();
+                }
+                a.dispatch("markUploaded", json!({"id":op["id"]})).unwrap();
+            }
+            a.dispatch("update", json!({"id":key,"note":"本机"}))
+                .unwrap();
+            b.dispatch("update", json!({"id":key,"note":"远端"}))
+                .unwrap();
+            let queued = a.dispatch("pendingUploads", json!({})).unwrap();
+            let remote = b.dispatch("pendingUploads", json!({})).unwrap();
+            for op in remote
+                .as_array()
+                .unwrap()
+                .iter()
+                .filter(|op| op["spaceId"] == personal)
+            {
+                a.dispatch("applyOperation", op.clone()).unwrap();
+            }
+            let pending = a.dispatch("pending", json!({})).unwrap();
+            let conflict = pending
+                .as_array()
+                .unwrap()
+                .iter()
+                .find(|p| p["kind"] == "conflict")
+                .unwrap();
+            a.dispatch(
+                "resolveConflict",
+                json!({"id":conflict["id"],"choices":{"note":"remote"}}),
+            )
+            .unwrap();
+            let resolved = a.dispatch("pendingUploads", json!({})).unwrap();
+            let resolved = resolved.as_array().unwrap();
+            // 之前的操作完整保持不变，包括可能已经缓存密文的待发操作。
+            assert_eq!(
+                &resolved[..queued.as_array().unwrap().len()],
+                queued.as_array().unwrap()
+            );
+            for op in resolved {
+                if op["spaceId"] == personal {
+                    b.dispatch("applyOperation", op.clone()).unwrap();
+                } else {
+                    for field in [
+                        "note",
+                        "accountId",
+                        "captureId",
+                        "transactionKey",
+                        "locks",
+                        "sharedSnapshot",
+                    ] {
+                        assert!(op["patch"].get(field).is_none());
+                        assert!(op["resolves"].get(field).is_none());
+                    }
+                }
+                a.dispatch("markUploaded", json!({"id":op["id"]})).unwrap();
+            }
+            a.dispatch("update", json!({"id":key,"note":"确认后的编辑"}))
+                .unwrap();
+            let next = a.dispatch("pendingUploads", json!({})).unwrap();
+            for op in next
+                .as_array()
+                .unwrap()
+                .iter()
+                .filter(|op| op["spaceId"] == personal)
+            {
+                assert_eq!(
+                    b.dispatch("applyOperation", op.clone()).unwrap()["conflict"],
+                    false
+                );
+            }
+            assert_eq!(b.record(key).unwrap()["note"], "确认后的编辑");
+            assert!(b
+                .dispatch("pending", json!({}))
+                .unwrap()
+                .as_array()
+                .unwrap()
+                .is_empty());
         }
     }
 }

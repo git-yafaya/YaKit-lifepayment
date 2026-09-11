@@ -178,7 +178,16 @@ mod checks {
         .unwrap();
         let wire = serde_json::to_vec(&envelope).unwrap();
         assert!(!String::from_utf8_lossy(&wire).contains("秘密午饭"));
+        assert_eq!(open(&received, &envelope).unwrap().0.version, 2);
         assert_eq!(open(&received, &envelope).unwrap().1, operation);
+        let mut unsupported = envelope.clone();
+        let mut header: Header = serde_json::from_slice(&unb64(&envelope.header).unwrap()).unwrap();
+        header.version = 3;
+        unsupported.header = b64(&serde_json::to_vec(&header).unwrap());
+        assert_eq!(
+            open(&received, &unsupported).err().as_deref(),
+            Some("unsupported-version")
+        );
         let mut tampered = envelope.clone();
         tampered.ciphertext = b64(b"tampered");
         assert!(open(&received, &tampered).is_err());

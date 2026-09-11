@@ -2282,7 +2282,7 @@ dependencies = [
 
 [[package]]
 name = "lightledger-android"
-version = "0.1.0"
+version = "0.1.1"
 dependencies = [
  "base64 0.22.1",
  "lightledger-core",
@@ -2298,7 +2298,7 @@ dependencies = [
 
 [[package]]
 name = "lightledger-app"
-version = "0.1.0"
+version = "0.1.1"
 dependencies = [
  "base64 0.22.1",
  "lightledger-core",
@@ -2317,7 +2317,7 @@ dependencies = [
 
 [[package]]
 name = "lightledger-core"
-version = "0.1.0"
+version = "0.1.1"
 dependencies = [
  "aes-gcm",
  "base64 0.22.1",
@@ -2333,7 +2333,7 @@ dependencies = [
 
 [[package]]
 name = "lightledger-sync"
-version = "0.1.0"
+version = "0.1.1"
 dependencies = [
  "aes-gcm",
  "base64 0.22.1",
@@ -4642,7 +4642,7 @@ dependencies = [
 
 [[package]]
 name = "tauri-plugin-device"
-version = "0.1.0"
+version = "0.1.1"
 dependencies = [
  "base64 0.22.1",
  "serde_json",
